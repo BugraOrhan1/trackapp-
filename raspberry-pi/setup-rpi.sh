@@ -105,8 +105,8 @@ fi
 # STEP 5: Install Python packages
 # ============================================
 log_info "Installing Python packages in venv..."
-"$VENV_DIR/bin/pip" install --upgrade pip setuptools
-"$VENV_DIR/bin/pip" install setuptools==81.0.2 numpy pyserial "pyrtlsdr==0.2.93"
+"$VENV_DIR/bin/pip" install --upgrade pip
+"$VENV_DIR/bin/pip" install setuptools==80.10.2 numpy pyserial "pyrtlsdr==0.2.93"
 log_ok "Python packages installed"
 
 # Verify imports
