@@ -2316,27 +2316,9 @@ document.querySelectorAll("#settingsPanel, #profilePanel").forEach((panel) => {
 switchAuthTab("login");
 
 (async () => {
-  if (!hasAuthConfig()) {
-    showLogin();
-    setLoginHint("Vul apiBaseUrl in config.js in (/.netlify/functions).", "error");
-    return;
-  }
-
-  const existingSession = getSession();
-  if (!existingSession) {
-    showLogin();
-    return;
-  }
-
-  const validSession = await validateExistingSession(existingSession);
-  if (!validSession) {
-    clearSession();
-    showLogin();
-    setLoginHint("Sessie verlopen. Log opnieuw in.", "error");
-    return;
-  }
-
-  setSession(validSession, true);
+  // TEMPORARILY DISABLED - DEMO MODE
+  // Skip authentication and go straight to the app
   showApp();
   startAppIfNeeded();
+  addLogEntry("🔓 Demo mode - inlog uitgeschakeld", "info");
 })();
