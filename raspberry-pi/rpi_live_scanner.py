@@ -141,6 +141,8 @@ class RPiScanner:
         self.occupancy_ema = np.zeros(self.config.channels, dtype=float)
         self.delta_history: deque[np.ndarray] = deque(maxlen=6)
         self.monitor_cycle_count = 0
+        self.bt_reconnect_interval_sec = 5.0
+        self._last_bt_reconnect_try = 0.0
 
     def connect_bluetooth(self) -> bool:
         try:
@@ -152,13 +154,27 @@ class RPiScanner:
             self.bt_serial = None
             return False
 
+    def ensure_bluetooth_connected(self, force: bool = False) -> bool:
+        if self.bt_serial:
+            return True
+        now = time.time()
+        if not force and (now - self._last_bt_reconnect_try) < self.bt_reconnect_interval_sec:
+            return False
+        self._last_bt_reconnect_try = now
+        return self.connect_bluetooth()
+
     def send_bt_data(self, data: dict) -> None:
         if not self.bt_serial:
             return
         try:
             self.bt_serial.write((json.dumps(data) + "\n").encode("utf-8"))
         except Exception as exc:
-            LOGGER.debug("Bluetooth send error: %s", exc)
+            LOGGER.warning("Bluetooth send error, will reconnect: %s", exc)
+            try:
+                self.bt_serial.close()
+            except Exception:
+                pass
+            self.bt_serial = None
 
     def _compute_channel_max_from_capture(self, center_freq_hz: float, samples: np.ndarray) -> np.ndarray:
         offsets_hz, power_db = compute_spectrum_db(samples, self.config.sample_rate)
@@ -250,6 +266,7 @@ class RPiScanner:
         alert_streak = 0
 
         while self.is_running:
+            self.ensure_bluetooth_connected()
             power = self._scan_full_band_cycle()
             self.current_power = power
             self.monitor_cycle_count += 1
@@ -378,6 +395,52 @@ def try_rfcomm_bind(device_path: str, target_mac: str) -> None:
         LOGGER.warning("rfcomm bind failed (%s). You can run manually: sudo rfcomm bind %s %s", exc, device_path, target_mac)
 
 
+def get_first_paired_mac() -> str:
+    """Return first paired Bluetooth device MAC from bluetoothctl, or empty string."""
+    try:
+        result = subprocess.run(
+            ["bluetoothctl", "paired-devices"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            return ""
+        for line in result.stdout.splitlines():
+            # Expected format: Device XX:XX:XX:XX:XX:XX Name
+            parts = line.strip().split()
+            if len(parts) >= 2 and parts[0] == "Device":
+                return parts[1]
+    except Exception:
+        return ""
+    return ""
+
+
+def ensure_rfcomm_device(device_path: str, preferred_mac: str = "") -> str:
+    """Ensure rfcomm device exists. Returns MAC used for bind or empty string."""
+    if os.path.exists(device_path):
+        return preferred_mac
+
+    mac_to_use = preferred_mac.strip()
+    if not mac_to_use:
+        mac_to_use = get_first_paired_mac()
+        if mac_to_use:
+            LOGGER.info("Auto-selected paired phone MAC: %s", mac_to_use)
+
+    if not mac_to_use:
+        return ""
+
+    try:
+        subprocess.run(["rfcomm", "release", device_path], check=False)
+    except Exception:
+        pass
+
+    try_rfcomm_bind(device_path, mac_to_use)
+    if os.path.exists(device_path):
+        return mac_to_use
+    return ""
+
+
 def run_scanner_mode(args: argparse.Namespace) -> int:
     config = ScanConfig(
         sample_rate=args.sample_rate,
@@ -392,18 +455,20 @@ def run_scanner_mode(args: argparse.Namespace) -> int:
         bt_baudrate=args.bt_baudrate,
     )
 
-    if args.auto_bind_mac:
-        try_rfcomm_bind(config.bt_port, args.auto_bind_mac)
+    used_mac = ensure_rfcomm_device(config.bt_port, args.auto_bind_mac)
 
     if not os.path.exists(config.bt_port):
         LOGGER.warning(
-            "Bluetooth device %s not found. Pair device and run: sudo rfcomm bind %s <MAC_ADDR>",
-            config.bt_port,
+            "Bluetooth device %s not found. Pair phone with Pi Bluetooth first; scanner will auto-connect once paired.",
             config.bt_port,
         )
+    elif used_mac:
+        LOGGER.info("rfcomm ready on %s using %s", config.bt_port, used_mac)
+    else:
+        LOGGER.info("rfcomm ready on %s", config.bt_port)
 
     scanner = RPiScanner(config)
-    if not scanner.connect_bluetooth():
+    if not scanner.ensure_bluetooth_connected(force=True):
         LOGGER.warning("Continuing without Bluetooth output")
 
     try:

@@ -74,17 +74,13 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-3. Bind RFCOMM serial:
+3. Pair phone Bluetooth (automatic mode):
 
 ```bash
 sudo hcitool scan
-sudo rfcomm bind /dev/rfcomm0 00:1A:2B:3C:4D:5E
-ls -la /dev/rfcomm0
 
-# Save MAC for automatic bind on boot
-sudo tee /etc/default/rpi_scanner > /dev/null << EOF
-BT_TARGET_MAC=00:1A:2B:3C:4D:5E
-EOF
+# Optional manual fallback only:
+# sudo rfcomm bind /dev/rfcomm0 00:1A:2B:3C:4D:5E
 ```
 
 4. Copy files and install service:

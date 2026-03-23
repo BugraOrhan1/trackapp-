@@ -23,17 +23,13 @@ sudo apt-get install -y bluez bluez-tools rfcomm
 python3 -m pip install --user numpy pyrtlsdr pyserial
 ```
 
-### 2. Pair and bind Bluetooth serial
+### 2. Pair phone with Raspberry Pi Bluetooth
 
 ```bash
 sudo hcitool scan
-sudo rfcomm bind /dev/rfcomm0 00:1A:2B:3C:4D:5E
-ls -la /dev/rfcomm0
 
-# Save MAC for automatic boot bind
-sudo tee /etc/default/rpi_scanner > /dev/null << EOF
-BT_TARGET_MAC=00:1A:2B:3C:4D:5E
-EOF
+# Optional manual bind test (not required for normal use)
+# sudo rfcomm bind /dev/rfcomm0 00:1A:2B:3C:4D:5E
 ```
 
 ### 3. Start scanner on Raspberry Pi
@@ -156,15 +152,15 @@ python3 rpi_live_scanner.py receiver ...
 
 ## Full auto-start behavior
 
-With the updated service and `/etc/default/rpi_scanner` configured:
+With the updated service:
 
 - Raspberry Pi boot starts scanner service automatically.
-- Service attempts rfcomm bind using `BT_TARGET_MAC`.
-- If your phone is paired/trusted and Bluetooth is on, data flow starts without manual scanner commands.
+- Service tries to auto-select the first paired phone and create `/dev/rfcomm0`.
+- Scanner keeps reconnecting Bluetooth while running, so web app data resumes automatically after reconnect.
 
 ## Troubleshooting
 
-- No `/dev/rfcomm0`: run `sudo rfcomm bind /dev/rfcomm0 <MAC_ADDR>`
+- No `/dev/rfcomm0`: ensure your phone is paired/trusted; optional fallback: `sudo rfcomm bind /dev/rfcomm0 <MAC_ADDR>`
 - RTL-SDR missing: run `rtl_test -t`
 - Permission issue for `/var/log/rpi_scanner.log`: use `--log-file /home/pi/rpi_scanner.log`
 - High CPU: lower `--sample-rate` and `--samples-per-read`, or increase `--scan-delay-sec`
