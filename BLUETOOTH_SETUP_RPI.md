@@ -22,16 +22,32 @@ Device XX:XX:XX:XX:XX:XX Phone-Name
 
 ```bash
 bluetoothctl
+# Now you're in the interactive menu
+
 scan on
 # Wait for your phone to appear in the list
-# Example: Device XX:XX:XX:XX:XX:XX Phone-Name
+# Example: [CHG] Device XX:XX:XX:XX:XX:XX Name: Phone-Name
 
+# Once you see your device, stop scanning
+scan off
+
+# Pair with your phone MAC address
 pair XX:XX:XX:XX:XX:XX
-# Confirm pairing on your phone
+# Confirm pairing on your phone when prompted
 
-trust XX:XX:XX:XX:XX:XX  # Optional: auto-connect in future
+# (Optional) Set as trusted for auto-connect
+trust XX:XX:XX:XX:XX:XX
+
+# Exit the menu
 exit
 ```
+
+**Verify pairing worked:**
+```bash
+bluetoothctl paired-devices
+```
+
+Should show your phone!
 
 ---
 
