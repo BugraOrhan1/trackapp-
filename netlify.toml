@@ -1,13 +1,13 @@
-functionsDirectory = "C:\\Users\\pobug\\Desktop\\hulpdiensten dedectie app\\web app\\upload\\netlify\\functions"
+functionsDirectory = "netlify/functions"
 functionsDirectoryOrigin = "config-v1"
 plugins = []
 headers = []
 redirects = []
 
 [build]
-publish = "C:\\Users\\pobug\\Desktop\\hulpdiensten dedectie app\\web app\\upload"
+publish = "."
 publishOrigin = "default"
-functions = "C:\\Users\\pobug\\Desktop\\hulpdiensten dedectie app\\web app\\upload\\netlify\\functions"
+functions = "netlify/functions"
 
   [build.environment]
 
