@@ -7,12 +7,16 @@ exports.handler = async (event) => {
   }
 
   try {
+    console.log("Login: Parsing body");
     const { email, password } = JSON.parse(event.body || "{}");
     if (!email || !password) {
       return json(400, { error: "E-mail en wachtwoord zijn verplicht" });
     }
 
+    console.log("Login: Getting SQL client");
     const sql = getSql();
+    console.log("Login: Querying user - email:", email);
+    
     const users = await sql`
       select id, name, email, birth_date, email_verified, password_hash
       from app_users
@@ -25,11 +29,14 @@ exports.handler = async (event) => {
     }
 
     const user = users[0];
+    console.log("Login: User found, comparing password");
+    
     const ok = await comparePassword(password, user.password_hash);
     if (!ok) {
       return json(401, { error: "Onjuiste inloggegevens" });
     }
 
+    console.log("Login: Password OK, signing token");
     const token = signAuthToken(user);
 
     return json(200, {
@@ -44,6 +51,11 @@ exports.handler = async (event) => {
       refresh_token: null,
     });
   } catch (error) {
-    return json(500, { error: error.message || "Serverfout" });
+    console.error("Login ERROR:", error.message);
+    console.error("Login ERROR STACK:", error.stack);
+    return json(500, { 
+      error: error.message || "Serverfout",
+      debug: error.message 
+    });
   }
 };
