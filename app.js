@@ -51,6 +51,12 @@ let manualFollowPaused = false;
 let activeMapTheme = null;
 let lastMapUpdateTime = 0;
 let lastCompassUpdateTime = 0;
+let btPort = null;
+let btReader = null;
+let btReadLoopActive = false;
+let btLineBuffer = "";
+let btConnected = false;
+let lastRfSignalDb = 0;
 
 const SPEED_CAMERA_ALERT_COOLDOWN_MS = 90 * 1000;
 const SPEED_CAMERA_SPEECH_COOLDOWN_MS = 20 * 1000;
@@ -283,6 +289,150 @@ function updateCompassWidget() {
 
   const heading = Number.isFinite(currentHeading) ? currentHeading : 0;
   compassNeedle.style.transform = `rotate(${heading}deg)`;
+}
+
+function setBluetoothUiState(connected, text) {
+  const connectBtBtn = document.getElementById("connectBtBtn");
+  const btStatusText = document.getElementById("btStatusText");
+
+  if (connectBtBtn) {
+    connectBtBtn.classList.toggle("active", connected);
+    connectBtBtn.textContent = connected ? "🟢 Bluetooth verbonden (klik om te ontkoppelen)" : "🔵 Koppel Raspberry Bluetooth";
+  }
+
+  if (btStatusText) {
+    btStatusText.textContent = text || (connected ? "Bluetooth: verbonden" : "Bluetooth: niet verbonden");
+  }
+}
+
+function getSignalScaleFromDb(valueDb) {
+  const normalized = Math.max(0, Math.min(18, Number(valueDb) || 0));
+  return 0.65 + (normalized / 18) * 1.35;
+}
+
+function updateSignalOrbVisual(valueDb, alert) {
+  const rfSignalOrb = document.getElementById("rfSignalOrb");
+  const rfSignalText = document.getElementById("rfSignalText");
+  const rfSignalMeta = document.getElementById("rfSignalMeta");
+
+  if (!rfSignalOrb || !rfSignalText || !rfSignalMeta) {
+    return;
+  }
+
+  const safeDb = Number.isFinite(Number(valueDb)) ? Number(valueDb) : 0;
+  const scale = getSignalScaleFromDb(safeDb);
+  rfSignalOrb.style.setProperty("--signal-scale", scale.toFixed(3));
+  rfSignalOrb.classList.toggle("alert", Boolean(alert));
+  rfSignalText.textContent = `${safeDb.toFixed(1)} dB`;
+  rfSignalMeta.textContent = alert ? "Sterk signaal gedetecteerd" : "Live signaal van Raspberry Pi";
+  lastRfSignalDb = safeDb;
+}
+
+function parseBluetoothJsonLine(line) {
+  let payload;
+  try {
+    payload = JSON.parse(line);
+  } catch {
+    return;
+  }
+
+  if (payload.status === "BASELINE") {
+    addLogEntry(`📡 Baseline ${payload.cycle || "?"}/14`, "info");
+    return;
+  }
+
+  if (payload.status === "BASELINE_READY") {
+    addLogEntry("✅ Raspberry baseline klaar", "success");
+    return;
+  }
+
+  if (payload.status === "SCANNING") {
+    addLogEntry("📶 Raspberry live scanner actief", "success");
+    return;
+  }
+
+  if (typeof payload.peak_db === "number") {
+    updateSignalOrbVisual(payload.peak_db, Boolean(payload.alert));
+  }
+
+  if (payload.alert && typeof payload.peak_freq_mhz === "number") {
+    addLogEntry(`🚨 RF alert ${payload.peak_freq_mhz.toFixed(2)} MHz (${(payload.peak_db || 0).toFixed(1)} dB)`, "danger");
+  }
+}
+
+async function disconnectBluetoothSerial(logMessage = true) {
+  btReadLoopActive = false;
+
+  if (btReader) {
+    try {
+      await btReader.cancel();
+    } catch {
+    }
+    btReader = null;
+  }
+
+  if (btPort) {
+    try {
+      await btPort.close();
+    } catch {
+    }
+    btPort = null;
+  }
+
+  btConnected = false;
+  setBluetoothUiState(false, "Bluetooth: niet verbonden");
+  if (logMessage) {
+    addLogEntry("Bluetooth koppeling verbroken", "info");
+  }
+}
+
+async function connectBluetoothSerial() {
+  if (!("serial" in navigator)) {
+    addLogEntry("Deze browser ondersteunt geen Web Serial. Gebruik Chrome/Edge over HTTPS.", "warning");
+    setBluetoothUiState(false, "Bluetooth: browser ondersteunt dit niet");
+    return;
+  }
+
+  try {
+    setBluetoothUiState(false, "Bluetooth: kies je Raspberry seriele poort...");
+    btPort = await navigator.serial.requestPort();
+    await btPort.open({ baudRate: 115200 });
+
+    const decoder = new TextDecoderStream();
+    btPort.readable.pipeTo(decoder.writable).catch(() => {});
+    btReader = decoder.readable.getReader();
+    btConnected = true;
+    btReadLoopActive = true;
+    btLineBuffer = "";
+
+    setBluetoothUiState(true, "Bluetooth: verbonden met Raspberry stream");
+    addLogEntry("Bluetooth stream verbonden", "success");
+
+    while (btReadLoopActive) {
+      const { value, done } = await btReader.read();
+      if (done) {
+        break;
+      }
+      btLineBuffer += value || "";
+
+      let newlineIndex = btLineBuffer.indexOf("\n");
+      while (newlineIndex !== -1) {
+        const rawLine = btLineBuffer.slice(0, newlineIndex).trim();
+        btLineBuffer = btLineBuffer.slice(newlineIndex + 1);
+        if (rawLine) {
+          parseBluetoothJsonLine(rawLine);
+        }
+        newlineIndex = btLineBuffer.indexOf("\n");
+      }
+    }
+  } catch (error) {
+    addLogEntry(`Bluetooth connectie mislukt: ${error.message || error}`, "warning");
+    setBluetoothUiState(false, "Bluetooth: verbinden mislukt");
+  } finally {
+    if (btConnected) {
+      await disconnectBluetoothSerial(false);
+    }
+  }
 }
 
 // ============================================
@@ -1838,6 +1988,8 @@ function startAppIfNeeded() {
   loadLevelFromStatusFile();
   loadReports();
   startRealtimeReportsSync();
+  setBluetoothUiState(false, "Bluetooth: niet verbonden");
+  updateSignalOrbVisual(0, false);
   updatePublicCameraButton();
   addLogEntry("✅ Flitser Alert Pro gestart", "success");
   appStarted = true;
@@ -2045,6 +2197,21 @@ on("soundBtn", "click", () => {
   addLogEntry(`Geluid ${settings.soundEnabled ? "in" : "uit"}geschakeld`, "info");
   if (settings.soundEnabled) {
     playAlertSound(1);
+  }
+});
+
+on("connectBtBtn", "click", async () => {
+  if (btConnected) {
+    await disconnectBluetoothSerial(true);
+    return;
+  }
+
+  await connectBluetoothSerial();
+});
+
+window.addEventListener("beforeunload", () => {
+  if (btConnected) {
+    disconnectBluetoothSerial(false);
   }
 });
 

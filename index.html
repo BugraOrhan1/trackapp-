@@ -75,6 +75,14 @@
           <div id="accelValue" class="speed-sub">0-100: --</div>
         </div>
 
+        <div class="rf-card glass">
+          <div class="rf-title">RF Signaal</div>
+          <div id="rfSignalOrb" class="rf-signal-orb">
+            <span id="rfSignalText" class="rf-signal-text">0.0 dB</span>
+          </div>
+          <div id="rfSignalMeta" class="rf-signal-meta">Wacht op Bluetooth data</div>
+        </div>
+
         <div class="status-card glass">
           <div id="publicDataSummary">Flitsers worden geladen...</div>
           <div id="cameraAlertStatus">Flitser-alert actief op 450m.</div>
@@ -177,6 +185,8 @@
             <label class="switch-row">Toon debug info
               <input id="debugInfoToggle" type="checkbox" />
             </label>
+            <button id="connectBtBtn" type="button">🔵 Koppel Raspberry Bluetooth</button>
+            <div id="btStatusText" class="profile-stat">Bluetooth: niet verbonden</div>
             <button id="testCameraAlertBtn" type="button">🧪 Test flitser-alert</button>
           </div>
         </div>

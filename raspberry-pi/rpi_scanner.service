@@ -1,0 +1,18 @@
+[Unit]
+Description=RTL-SDR RF Anomaly Scanner with Bluetooth
+After=network.target bluetooth.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi
+EnvironmentFile=-/etc/default/rpi_scanner
+ExecStartPre=/bin/sh -c '/usr/bin/rfcomm release /dev/rfcomm0 || true'
+ExecStart=/usr/bin/python3 /home/pi/rpi_live_scanner.py scanner --bt-port /dev/rfcomm0 --bt-baudrate 115200 --auto-bind-mac ${BT_TARGET_MAC}
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
