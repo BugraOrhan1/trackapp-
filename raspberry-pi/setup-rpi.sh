@@ -106,7 +106,7 @@ fi
 # ============================================
 log_info "Installing Python packages in venv..."
 "$VENV_DIR/bin/pip" install --upgrade pip
-"$VENV_DIR/bin/pip" install setuptools==80.10.2 numpy pyserial "pyrtlsdr==0.2.93"
+"$VENV_DIR/bin/pip" install "setuptools<82" numpy pyserial "pyrtlsdr==0.2.93"
 log_ok "Python packages installed"
 
 # Verify imports
@@ -138,8 +138,10 @@ After=bluetooth.target network.target
 [Service]
 Type=simple
 User=$CURRENT_USER
+SupplementaryGroups=dialout bluetooth
+PermissionsStartOnly=true
 WorkingDirectory=$REPO_DIR/raspberry-pi
-ExecStartPre=/bin/bash -c 'sudo rfcomm release /dev/rfcomm0 2>/dev/null || true'
+ExecStartPre=/bin/bash -c '/usr/bin/rfcomm release /dev/rfcomm0 2>/dev/null || true'
 ExecStart=$VENV_DIR/bin/python $SCANNER_SCRIPT
 Restart=on-failure
 RestartSec=5

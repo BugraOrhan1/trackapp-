@@ -1439,6 +1439,57 @@ function getApiBaseUrl() {
   return (window.APP_CONFIG?.apiBaseUrl || "/.netlify/functions").replace(/\/$/, "");
 }
 
+function isAuthRequired() {
+  return Boolean(window.APP_CONFIG?.requireAuth);
+}
+
+function getRequestTimeoutMs() {
+  const value = Number(window.APP_CONFIG?.requestTimeoutMs);
+  return Number.isFinite(value) && value > 0 ? value : 10000;
+}
+
+function buildDemoSession() {
+  const configured = window.APP_CONFIG?.demoUser || {};
+  return {
+    user: {
+      id: configured.id || "demo-user",
+      name: configured.name || "Demo User",
+      email: configured.email || "demo@local",
+      birth_date: configured.birth_date || "1990-01-01",
+      email_verified: configured.email_verified !== false,
+    },
+    access_token: null,
+    refresh_token: null,
+  };
+}
+
+async function fetchJson(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), getRequestTimeoutMs());
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    return { response, data };
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("Verzoek timeout. Controleer verbinding en probeer opnieuw.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function fetchCloudReports() {
   const authHeaders = getCloudAuthHeaders();
   if (!authHeaders) {
@@ -1888,7 +1939,7 @@ async function supabaseRegister({ name, email, password, birthDate }) {
     throw new Error("API config ontbreekt in config.js");
   }
 
-  const response = await fetch(`${getApiBaseUrl()}/auth-register`, {
+  const { response, data } = await fetchJson(`${getApiBaseUrl()}/auth-register`, {
     method: "POST",
     headers: getAuthApiHeaders(),
     body: JSON.stringify({
@@ -1899,9 +1950,8 @@ async function supabaseRegister({ name, email, password, birthDate }) {
     }),
   });
 
-  const data = await response.json();
   if (!response.ok) {
-    throw new Error(data?.error || "Registratie mislukt");
+    throw new Error(data?.error || `Registratie mislukt (${response.status})`);
   }
 
   return data;
@@ -1912,15 +1962,14 @@ async function supabaseLogin(email, password) {
     throw new Error("API config ontbreekt in config.js");
   }
 
-  const response = await fetch(`${getApiBaseUrl()}/auth-login`, {
+  const { response, data } = await fetchJson(`${getApiBaseUrl()}/auth-login`, {
     method: "POST",
     headers: getAuthApiHeaders(),
     body: JSON.stringify({ email, password }),
   });
 
-  const data = await response.json();
   if (!response.ok) {
-    throw new Error(data?.error || "Inloggen mislukt");
+    throw new Error(data?.error || `Inloggen mislukt (${response.status})`);
   }
 
   return data;
@@ -1946,7 +1995,7 @@ async function validateExistingSession(session) {
   }
 
   try {
-    const response = await fetch(`${getApiBaseUrl()}/auth-me`, {
+    const { response, data } = await fetchJson(`${getApiBaseUrl()}/auth-me`, {
       headers: {
         ...getAuthApiHeaders(),
         Authorization: `Bearer ${session.access_token}`,
@@ -1957,11 +2006,9 @@ async function validateExistingSession(session) {
       return null;
     }
 
-    const user = await response.json();
-
     return {
       ...session,
-      user,
+      user: data,
     };
   } catch {
     return null;
@@ -2316,9 +2363,35 @@ document.querySelectorAll("#settingsPanel, #profilePanel").forEach((panel) => {
 switchAuthTab("login");
 
 (async () => {
-  // TEMPORARILY DISABLED - DEMO MODE
-  // Skip authentication and go straight to the app
+  if (!isAuthRequired()) {
+    setSession(buildDemoSession(), false);
+    showApp();
+    startAppIfNeeded();
+    addLogEntry("Demo mode actief (inloggen uitgeschakeld via config.js)", "info");
+    return;
+  }
+
+  if (!hasAuthConfig()) {
+    showLogin();
+    setLoginHint("Vul apiBaseUrl in config.js in (/.netlify/functions).", "error");
+    return;
+  }
+
+  const existingSession = getSession();
+  if (!existingSession) {
+    showLogin();
+    return;
+  }
+
+  const validSession = await validateExistingSession(existingSession);
+  if (!validSession) {
+    clearSession();
+    showLogin();
+    setLoginHint("Sessie verlopen. Log opnieuw in.", "error");
+    return;
+  }
+
+  setSession(validSession, true);
   showApp();
   startAppIfNeeded();
-  addLogEntry("🔓 Demo mode - inlog uitgeschakeld", "info");
 })();
