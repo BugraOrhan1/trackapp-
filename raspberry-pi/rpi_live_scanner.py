@@ -128,6 +128,7 @@ class RPiScanner:
 
         self.baseline_ready = False
         self.baseline_power = np.full(self.config.channels, -95.0)
+        self.background_power = np.full(self.config.channels, -95.0)
         self.baseline_std = np.full(self.config.channels, 2.0)
         self.baseline_persistent_mask = np.zeros(self.config.channels, dtype=bool)
 
@@ -241,6 +242,7 @@ class RPiScanner:
 
         baseline_stack = np.vstack(baseline_rows)
         self.baseline_power = np.percentile(baseline_stack, 60, axis=0)
+        self.background_power = self.baseline_power.copy()
         self.baseline_std = np.maximum(np.std(baseline_stack, axis=0), 1.6)
 
         p50 = np.percentile(baseline_stack, 50, axis=0)
@@ -271,7 +273,8 @@ class RPiScanner:
             self.current_power = power
             self.monitor_cycle_count += 1
 
-            delta = power - self.baseline_power
+            # Use a learned background for delta instead of absolute power.
+            delta = power - self.background_power
             self.delta_history.append(delta.copy())
 
             if len(self.delta_history) >= 3:
@@ -309,7 +312,7 @@ class RPiScanner:
             medium_cluster = self._max_cluster_len(medium_mask)
             strong_cluster = self._max_cluster_len(strong_mask)
 
-            candidate_level = "none"
+            candidate_level = "green"
             if strong_cluster >= 2:
                 candidate_level = "red"
             elif medium_cluster >= 2:
@@ -334,7 +337,17 @@ class RPiScanner:
 
             calm = (temporal_delta < (self.config.threshold_db * 0.5)) & (~persistent_mask)
             if np.any(calm):
+                # Keep slow long-term baseline for reference and noise stats.
                 self.baseline_power[calm] = (self.baseline_power[calm] * 0.995) + (power[calm] * 0.005)
+
+            # Fast adaptive background learning (friend's suggestion):
+            # background = background * 0.95 + current * 0.05
+            # Skip strongest anomaly channels to avoid contaminating background.
+            learn_mask = ~(strong_mask | medium_mask)
+            if np.any(learn_mask):
+                self.background_power[learn_mask] = (
+                    (self.background_power[learn_mask] * 0.95) + (power[learn_mask] * 0.05)
+                )
 
             anomaly_channels = np.where(strong_mask | medium_mask)[0].tolist()
             payload = {
