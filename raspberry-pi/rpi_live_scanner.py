@@ -408,24 +408,50 @@ def try_rfcomm_bind(device_path: str, target_mac: str) -> None:
         LOGGER.warning("rfcomm bind failed (%s). You can run manually: sudo rfcomm bind %s %s", exc, device_path, target_mac)
 
 
-def get_first_paired_mac() -> str:
-    """Return first paired Bluetooth device MAC from bluetoothctl, or empty string."""
+def _extract_first_mac_from_bluetoothctl_output(output: str) -> str:
+    for line in output.splitlines():
+        # Expected format: Device XX:XX:XX:XX:XX:XX Name
+        parts = line.strip().split()
+        if len(parts) >= 2 and parts[0] == "Device":
+            return parts[1]
+    return ""
+
+
+def _run_bluetoothctl_command(args: list[str]) -> str:
     try:
         result = subprocess.run(
-            ["bluetoothctl", "paired-devices"],
+            ["bluetoothctl", *args],
             check=False,
             capture_output=True,
             text=True,
         )
         if result.returncode != 0:
             return ""
-        for line in result.stdout.splitlines():
-            # Expected format: Device XX:XX:XX:XX:XX:XX Name
-            parts = line.strip().split()
-            if len(parts) >= 2 and parts[0] == "Device":
-                return parts[1]
+        return result.stdout or ""
     except Exception:
         return ""
+
+
+def get_first_paired_mac() -> str:
+    """Return first paired/connected Bluetooth device MAC from bluetoothctl, or empty string."""
+    # Older BlueZ syntax.
+    output = _run_bluetoothctl_command(["paired-devices"])
+    mac = _extract_first_mac_from_bluetoothctl_output(output)
+    if mac:
+        return mac
+
+    # Newer BlueZ syntax.
+    output = _run_bluetoothctl_command(["devices", "Paired"])
+    mac = _extract_first_mac_from_bluetoothctl_output(output)
+    if mac:
+        return mac
+
+    # Last fallback: connected device list.
+    output = _run_bluetoothctl_command(["devices", "Connected"])
+    mac = _extract_first_mac_from_bluetoothctl_output(output)
+    if mac:
+        return mac
+
     return ""
 
 
