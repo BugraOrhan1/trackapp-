@@ -140,8 +140,10 @@ Type=simple
 User=$CURRENT_USER
 SupplementaryGroups=dialout bluetooth
 PermissionsStartOnly=true
+EnvironmentFile=-/etc/default/rpi_scanner
 WorkingDirectory=$REPO_DIR/raspberry-pi
 ExecStartPre=/bin/bash -c '/usr/bin/rfcomm release /dev/rfcomm0 2>/dev/null || true'
+ExecStartPre=/bin/bash -c 'if [ -n "${BT_TARGET_MAC}" ]; then /usr/bin/rfcomm bind /dev/rfcomm0 "${BT_TARGET_MAC}"; fi'
 ExecStart=$VENV_DIR/bin/python $SCANNER_SCRIPT
 Restart=on-failure
 RestartSec=5
@@ -155,6 +157,20 @@ WantedBy=multi-user.target
 echo "$SERVICE_CONTENT" | sudo tee "$SERVICE_FILE" > /dev/null
 sudo chmod 644 "$SERVICE_FILE"
 log_ok "Systemd service created at $SERVICE_FILE"
+
+# Create /etc/default/rpi_scanner when a paired/connected device is found.
+PAIR_OUT=$(bluetoothctl devices Paired 2>/dev/null || true)
+if [ -z "$PAIR_OUT" ]; then
+  PAIR_OUT=$(bluetoothctl devices Connected 2>/dev/null || true)
+fi
+
+BT_TARGET_MAC=$(echo "$PAIR_OUT" | awk '/^Device /{print $2; exit}')
+if [ -n "$BT_TARGET_MAC" ]; then
+  echo "BT_TARGET_MAC=$BT_TARGET_MAC" | sudo tee /etc/default/rpi_scanner > /dev/null
+  log_ok "Saved BT_TARGET_MAC to /etc/default/rpi_scanner: $BT_TARGET_MAC"
+else
+  log_warn "No paired/connected Bluetooth device found. Set BT_TARGET_MAC in /etc/default/rpi_scanner manually."
+fi
 
 # ============================================
 # STEP 8: Enable service
@@ -217,7 +233,7 @@ echo "     trust XX:XX:XX:XX:XX:XX"
 echo "     exit"
 echo ""
 echo "  2. Bind Bluetooth device:"
-echo "     MAC=\$(bluetoothctl paired-devices | head -n1 | awk '{print \$2}')"
+echo "     MAC=\$(bluetoothctl devices Paired | head -n1 | awk '{print \$2}')"
 echo "     sudo rfcomm bind /dev/rfcomm0 \"\$MAC\""
 echo ""
 echo "  3. Check data flow:"

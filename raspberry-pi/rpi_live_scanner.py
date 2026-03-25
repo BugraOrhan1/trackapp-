@@ -403,7 +403,10 @@ def try_rfcomm_bind(device_path: str, target_mac: str) -> None:
     LOGGER.info("Trying rfcomm bind: %s -> %s", device_path, target_mac)
     try:
         subprocess.run(["rfcomm", "bind", device_path, target_mac], check=True)
-        LOGGER.info("rfcomm bind success")
+        if os.path.exists(device_path):
+            LOGGER.info("rfcomm bind success")
+        else:
+            LOGGER.warning("rfcomm bind command ran but %s not created", device_path)
     except Exception as exc:
         LOGGER.warning("rfcomm bind failed (%s). You can run manually: sudo rfcomm bind %s %s", exc, device_path, target_mac)
 
