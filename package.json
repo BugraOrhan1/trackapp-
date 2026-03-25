@@ -3,6 +3,11 @@
   "private": true,
   "version": "1.0.0",
   "type": "commonjs",
+  "scripts": {
+    "dev": "npx netlify dev",
+    "serve": "npx netlify dev",
+    "deploy": "npx netlify deploy --prod"
+  },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
     "bcryptjs": "^2.4.3",
