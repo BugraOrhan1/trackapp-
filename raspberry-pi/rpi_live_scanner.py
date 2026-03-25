@@ -330,6 +330,15 @@ class RPiScanner:
                     alert_streak = max(0, alert_streak - 1)
                 self.current_alert = alert_streak >= 3
 
+            # Fast-pass trigger for short drive-by peaks that may not persist long enough
+            # to build full streak across multiple full-band cycles.
+            if (
+                self.monitor_cycle_count > warmup_cycles
+                and candidate_level == "red"
+                and float(np.max(temporal_delta)) >= (self.config.threshold_db + 8.0)
+            ):
+                self.current_alert = True
+
             peak_idx = int(np.argmax(temporal_delta))
             self.current_peak_db = float(power[peak_idx])
             self.current_peak_freq_mhz = float(self.channel_centers_mhz[peak_idx])
@@ -360,16 +369,36 @@ class RPiScanner:
                 "num_anomalies": len(anomaly_channels),
                 "top_channels": anomaly_channels[:5],
                 "power_range": [float(np.min(power)), float(np.max(power))],
+                "diag": {
+                    "strong_cluster": int(strong_cluster),
+                    "medium_cluster": int(medium_cluster),
+                    "alert_streak": int(alert_streak),
+                    "threshold_db": float(self.config.threshold_db),
+                },
             }
             self.send_bt_data(payload)
 
             if self.current_alert:
                 LOGGER.warning(
-                    "ALERT cycle=%d freq=%.3f MHz delta=%.1f dB anomalies=%d",
+                    "ALERT cycle=%d freq=%.3f MHz delta=%.1f dB anomalies=%d clusters[s=%d,m=%d] streak=%d",
                     self.monitor_cycle_count,
                     self.current_peak_freq_mhz,
                     self.current_delta_db,
                     len(anomaly_channels),
+                    strong_cluster,
+                    medium_cluster,
+                    alert_streak,
+                )
+            elif candidate_level != "green":
+                LOGGER.info(
+                    "PRE-ALERT cycle=%d level=%s freq=%.3f MHz delta=%.1f dB clusters[s=%d,m=%d] streak=%d",
+                    self.monitor_cycle_count,
+                    candidate_level,
+                    self.current_peak_freq_mhz,
+                    self.current_delta_db,
+                    strong_cluster,
+                    medium_cluster,
+                    alert_streak,
                 )
 
             time.sleep(self.config.scan_delay_sec)
