@@ -456,19 +456,19 @@ def ensure_rfcomm_device(device_path: str, preferred_mac: str = "") -> str:
 
 def run_scanner_mode(args: argparse.Namespace) -> int:
     config = ScanConfig(
-        sample_rate=args.sample_rate,
-        samples_per_read=args.samples_per_read,
-        threshold_db=args.threshold_db,
-        band_start_mhz=args.band_start_mhz,
-        band_end_mhz=args.band_end_mhz,
-        channels=args.channels,
-        baseline_cycles=args.baseline_cycles,
-        scan_delay_sec=args.scan_delay_sec,
-        bt_port=args.bt_port,
-        bt_baudrate=args.bt_baudrate,
+        sample_rate=getattr(args, "sample_rate", 2.4e6),
+        samples_per_read=getattr(args, "samples_per_read", 32768),
+        threshold_db=getattr(args, "threshold_db", 8.0),
+        band_start_mhz=getattr(args, "band_start_mhz", 380.0),
+        band_end_mhz=getattr(args, "band_end_mhz", 400.0),
+        channels=getattr(args, "channels", 200),
+        baseline_cycles=getattr(args, "baseline_cycles", 14),
+        scan_delay_sec=getattr(args, "scan_delay_sec", 0.1),
+        bt_port=getattr(args, "bt_port", "/dev/rfcomm0"),
+        bt_baudrate=getattr(args, "bt_baudrate", 115200),
     )
 
-    used_mac = ensure_rfcomm_device(config.bt_port, args.auto_bind_mac)
+    used_mac = ensure_rfcomm_device(config.bt_port, getattr(args, "auto_bind_mac", ""))
 
     if not os.path.exists(config.bt_port):
         LOGGER.warning(
