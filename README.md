@@ -11,7 +11,9 @@ Opgeschoonde versie met 1 duidelijke flow voor web + Raspberry Pi.
 
 ## Snel starten
 
-### 1. Web app lokaal
+### 1. Tijdelijk volledig lokaal (zonder Netlify)
+
+Gebruik dit als Netlify trial verlopen is.
 
 1. Installeer dependencies:
 
@@ -19,7 +21,28 @@ Opgeschoonde versie met 1 duidelijke flow voor web + Raspberry Pi.
 npm install
 ```
 
-2. Start lokaal met Netlify Functions:
+2. Start lokale website + lokale API + lokale database:
+
+```bash
+npm run local
+```
+
+3. Open:
+
+```text
+http://localhost:3000
+```
+
+Wat gebeurt er in deze modus:
+
+- Frontend draait lokaal
+- API draait lokaal op `/api/*`
+- Tijdelijke database staat in `local-db.json` (automatisch aangemaakt)
+- Auth/register/login/reports werken zonder Netlify/Neon
+
+### 2. Web app lokaal met Netlify (optioneel)
+
+Start lokaal met Netlify Functions:
 
 ```bash
 npx netlify dev
@@ -31,7 +54,7 @@ npx netlify dev
 http://localhost:8888
 ```
 
-### 2. Netlify productie
+### 3. Netlify productie
 
 1. Push naar GitHub (repo gekoppeld aan Netlify)
 2. Zet environment variables in Netlify:
@@ -45,7 +68,7 @@ JWT_SECRET=<sterke-random-string-32+>
 
 Gebruik het bestand `DATABASE_SCHEMA.sql`.
 
-### 3. Raspberry Pi in 1 keer
+### 4. Raspberry Pi in 1 keer
 
 Run op de Raspberry Pi:
 
@@ -73,8 +96,8 @@ journalctl -u rpi_scanner.service -f
 
 In `config.js`:
 
-- `requireAuth: false` -> direct app starten (demo)
-- `requireAuth: true` -> login verplicht
+- Lokaal (`localhost`): gebruikt automatisch `/api` en `requireAuth: true`
+- Hosted: gebruikt `/.netlify/functions`
 
 ## Belangrijkste bestanden
 

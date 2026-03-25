@@ -7,3 +7,7 @@ __pycache__/
 *.log
 .vscode/
 .DS_Store
+local-db.json
+
+# Local Netlify folder
+.netlify
