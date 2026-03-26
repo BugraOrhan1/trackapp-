@@ -57,6 +57,10 @@ let btReadLoopActive = false;
 let btLineBuffer = "";
 let btConnected = false;
 let lastRfSignalDb = 0;
+let lastRfSignalLevel = "green";
+let lastRfSignalAlert = false;
+let lastRfSignalUpdateAt = 0;
+let rfSignalDecayTimer = null;
 
 const SPEED_CAMERA_ALERT_COOLDOWN_MS = 90 * 1000;
 const SPEED_CAMERA_SPEECH_COOLDOWN_MS = 20 * 1000;
@@ -310,7 +314,18 @@ function getSignalScaleFromDb(valueDb) {
   return 0.65 + (normalized / 18) * 1.35;
 }
 
-function updateSignalOrbVisual(valueDb, alert) {
+function getSignalSizeFromDb(valueDb) {
+  const normalized = Math.max(0, Math.min(18, Number(valueDb) || 0));
+  return 64 + (normalized / 18) * 54;
+}
+
+function getSignalPulseFromDb(valueDb, alert) {
+  const normalized = Math.max(0, Math.min(18, Number(valueDb) || 0));
+  const base = alert ? 1.18 : 1.06;
+  return base + (normalized / 18) * 0.16;
+}
+
+function updateSignalOrbVisual(valueDb, alert, level = "green", markFresh = true) {
   const rfSignalOrb = document.getElementById("rfSignalOrb");
   const rfSignalText = document.getElementById("rfSignalText");
   const rfSignalMeta = document.getElementById("rfSignalMeta");
@@ -321,11 +336,51 @@ function updateSignalOrbVisual(valueDb, alert) {
 
   const safeDb = Number.isFinite(Number(valueDb)) ? Number(valueDb) : 0;
   const scale = getSignalScaleFromDb(safeDb);
+  const sizePx = getSignalSizeFromDb(safeDb);
+  const pulseScale = getSignalPulseFromDb(safeDb, Boolean(alert));
+
   rfSignalOrb.style.setProperty("--signal-scale", scale.toFixed(3));
+  rfSignalOrb.style.setProperty("--signal-size", `${sizePx.toFixed(0)}px`);
+  rfSignalOrb.style.setProperty("--signal-pulse-scale", pulseScale.toFixed(3));
   rfSignalOrb.classList.toggle("alert", Boolean(alert));
+  rfSignalOrb.classList.toggle("warn", String(level).toLowerCase() === "yellow");
   rfSignalText.textContent = `${safeDb.toFixed(1)} dB`;
-  rfSignalMeta.textContent = alert ? "Sterk signaal gedetecteerd" : "Live signaal van Raspberry Pi";
+  if (alert) {
+    rfSignalMeta.textContent = "ALERT: sterk signaal";
+  } else if (String(level).toLowerCase() === "yellow") {
+    rfSignalMeta.textContent = "Waarschuwing: verhoogd signaal";
+  } else {
+    rfSignalMeta.textContent = "Live signaal van Raspberry Pi";
+  }
   lastRfSignalDb = safeDb;
+  lastRfSignalLevel = String(level || "green").toLowerCase();
+  lastRfSignalAlert = Boolean(alert);
+  if (markFresh) {
+    lastRfSignalUpdateAt = Date.now();
+  }
+}
+
+function startRfSignalDecayLoop() {
+  if (rfSignalDecayTimer) {
+    return;
+  }
+
+  rfSignalDecayTimer = setInterval(() => {
+    const now = Date.now();
+    const msSinceLastFrame = now - lastRfSignalUpdateAt;
+
+    // Keep orb stable while fresh frames are arriving.
+    if (msSinceLastFrame <= 900) {
+      return;
+    }
+
+    // Smoothly decay towards zero when signal is lost.
+    const decayedDb = Math.max(0, lastRfSignalDb * 0.86 - 0.08);
+    const shouldKeepWarning = decayedDb > 3.5;
+    const level = shouldKeepWarning ? lastRfSignalLevel : "green";
+    const alert = shouldKeepWarning ? lastRfSignalAlert : false;
+    updateSignalOrbVisual(decayedDb, alert, level, false);
+  }, 220);
 }
 
 function parseBluetoothJsonLine(line) {
@@ -351,8 +406,12 @@ function parseBluetoothJsonLine(line) {
     return;
   }
 
-  if (typeof payload.peak_db === "number") {
-    updateSignalOrbVisual(payload.peak_db, Boolean(payload.alert));
+  const displayDb = typeof payload.peak_delta_db === "number"
+    ? payload.peak_delta_db
+    : (typeof payload.peak_db === "number" ? payload.peak_db : null);
+
+  if (typeof displayDb === "number") {
+    updateSignalOrbVisual(displayDb, Boolean(payload.alert), payload.level || "green");
   }
 
   if (payload.alert && typeof payload.peak_freq_mhz === "number") {
@@ -381,6 +440,7 @@ async function disconnectBluetoothSerial(logMessage = true) {
 
   btConnected = false;
   setBluetoothUiState(false, "Bluetooth: niet verbonden");
+  updateSignalOrbVisual(0, false, "green", false);
   if (logMessage) {
     addLogEntry("Bluetooth koppeling verbroken", "info");
   }
@@ -2036,8 +2096,9 @@ function startAppIfNeeded() {
   loadReports();
   startRealtimeReportsSync();
   setBluetoothUiState(false, "Bluetooth: niet verbonden");
-  updateSignalOrbVisual(0, false);
+  updateSignalOrbVisual(0, false, "green");
   updatePublicCameraButton();
+  startRfSignalDecayLoop();
   addLogEntry("✅ Flitser Alert Pro gestart", "success");
   appStarted = true;
 }

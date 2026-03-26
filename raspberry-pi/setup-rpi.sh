@@ -139,12 +139,11 @@ After=bluetooth.target network.target
 Type=simple
 User=$CURRENT_USER
 SupplementaryGroups=dialout bluetooth
-PermissionsStartOnly=true
 EnvironmentFile=-/etc/default/rpi_scanner
 WorkingDirectory=$REPO_DIR/raspberry-pi
-ExecStartPre=/bin/bash -c '/usr/bin/rfcomm release /dev/rfcomm0 2>/dev/null || true'
-ExecStartPre=/bin/bash -c 'if [ -n "${BT_TARGET_MAC}" ]; then /usr/bin/rfcomm bind /dev/rfcomm0 "${BT_TARGET_MAC}"; fi'
-ExecStart=$VENV_DIR/bin/python $SCANNER_SCRIPT
+Environment=BT_TRANSPORT=ble
+Environment=BLE_NAME_PREFIX=TrackScan
+ExecStart=$VENV_DIR/bin/python $SCANNER_SCRIPT scanner --bt-transport \\${BT_TRANSPORT}
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -158,19 +157,12 @@ echo "$SERVICE_CONTENT" | sudo tee "$SERVICE_FILE" > /dev/null
 sudo chmod 644 "$SERVICE_FILE"
 log_ok "Systemd service created at $SERVICE_FILE"
 
-# Create /etc/default/rpi_scanner when a paired/connected device is found.
-PAIR_OUT=$(bluetoothctl devices Paired 2>/dev/null || true)
-if [ -z "$PAIR_OUT" ]; then
-  PAIR_OUT=$(bluetoothctl devices Connected 2>/dev/null || true)
-fi
-
-BT_TARGET_MAC=$(echo "$PAIR_OUT" | awk '/^Device /{print $2; exit}')
-if [ -n "$BT_TARGET_MAC" ]; then
-  echo "BT_TARGET_MAC=$BT_TARGET_MAC" | sudo tee /etc/default/rpi_scanner > /dev/null
-  log_ok "Saved BT_TARGET_MAC to /etc/default/rpi_scanner: $BT_TARGET_MAC"
-else
-  log_warn "No paired/connected Bluetooth device found. Set BT_TARGET_MAC in /etc/default/rpi_scanner manually."
-fi
+# Create default scanner env for BLE transport (iPhone-compatible).
+{
+  echo "BT_TRANSPORT=ble"
+  echo "BLE_NAME_PREFIX=TrackScan"
+} | sudo tee /etc/default/rpi_scanner > /dev/null
+log_ok "Saved BLE defaults to /etc/default/rpi_scanner"
 
 # ============================================
 # STEP 8: Enable service
@@ -225,24 +217,20 @@ journalctl -u rpi_scanner.service -n 10 --no-pager
 
 echo ""
 echo "🔗 Next Steps:"
-echo "  1. Pair your phone with Bluetooth:"
+echo "  1. Pair/trust your iPhone with Bluetooth (optioneel, voor stabiele detecteerbaarheid):"
 echo "     bluetoothctl"
 echo "     scan on"
 echo "     pair XX:XX:XX:XX:XX:XX"
 echo "     trust XX:XX:XX:XX:XX:XX"
 echo "     exit"
 echo ""
-echo "  2. Bind Bluetooth device:"
-echo "     MAC=\$(bluetoothctl devices Paired | head -n1 | awk '{print \$2}')"
-echo "     sudo rfcomm bind /dev/rfcomm0 \"\$MAC\""
+echo "  2. Gebruik op iPhone een BLE scanner app (LightBlue / nRF Connect)"
+echo "     Zoek op naam: TrackScan"
 echo ""
-echo "  3. Check data flow:"
-echo "     cat /dev/rfcomm0"
-echo ""
-echo "  4. View live logs:"
+echo "  3. View live logs:"
 echo "     journalctl -u rpi_scanner.service -f"
 echo ""
-echo "  5. Open web app on your phone"
+echo "  4. Open web app on your phone"
 echo ""
 
 echo "📝 Useful Commands:"

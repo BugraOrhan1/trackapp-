@@ -8,13 +8,17 @@ One file with two modes:
 
 Compatibility:
 - Running without arguments defaults to scanner mode.
+
+Transport modes:
+- ble (default): update Bluetooth alias/advertising for iPhone-friendly BLE scanning
+- rfcomm: legacy serial over /dev/rfcomm0
+- auto: try rfcomm first, fallback to ble
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
-import importlib
 import json
 import logging
 import os
@@ -30,10 +34,11 @@ from typing import Any
 import numpy as np
 
 try:
+    import importlib
+
     serial: Any = importlib.import_module("serial")
 except ModuleNotFoundError:
-    print("ERROR: pyserial is not installed. Install with: python3 -m pip install --user pyserial")
-    raise SystemExit(1)
+    serial = None
 
 
 LOGGER = logging.getLogger("rpi_live_scanner")
@@ -78,8 +83,10 @@ class ScanConfig:
     channels: int = 200
     baseline_cycles: int = 14
     scan_delay_sec: float = 0.1
+    bt_transport: str = "ble"
     bt_port: str = "/dev/rfcomm0"
     bt_baudrate: int = 115200
+    ble_name_prefix: str = "TrackScan"
 
 
 class RTLBackend:
@@ -144,8 +151,34 @@ class RPiScanner:
         self.monitor_cycle_count = 0
         self.bt_reconnect_interval_sec = 5.0
         self._last_bt_reconnect_try = 0.0
+        self.ble_ready = False
+        self.last_ble_alias_update_ts = 0.0
+        self.last_ble_alias = ""
 
     def connect_bluetooth(self) -> bool:
+        transport = self.config.bt_transport.lower().strip()
+
+        if transport == "ble":
+            return self._connect_ble()
+        if transport == "rfcomm":
+            return self._connect_rfcomm()
+        if transport == "auto":
+            if self._connect_rfcomm():
+                LOGGER.info("Bluetooth transport: rfcomm")
+                return True
+            LOGGER.warning("rfcomm unavailable; switching to BLE transport")
+            self.config.bt_transport = "ble"
+            return self._connect_ble()
+
+        LOGGER.warning("Unknown transport '%s'; using BLE", self.config.bt_transport)
+        self.config.bt_transport = "ble"
+        return self._connect_ble()
+
+    def _connect_rfcomm(self) -> bool:
+        if serial is None:
+            LOGGER.warning("pyserial not installed; rfcomm transport unavailable")
+            self.bt_serial = None
+            return False
         try:
             self.bt_serial = serial.Serial(self.config.bt_port, self.config.bt_baudrate, timeout=1.0)
             LOGGER.info("Bluetooth connected on %s", self.config.bt_port)
@@ -155,7 +188,43 @@ class RPiScanner:
             self.bt_serial = None
             return False
 
+    def _run_bluetoothctl_script(self, lines: list[str]) -> bool:
+        script = "\n".join(lines + ["quit", ""])
+        try:
+            result = subprocess.run(
+                ["bluetoothctl"],
+                input=script,
+                capture_output=True,
+                text=True,
+                timeout=8,
+                check=False,
+            )
+            return result.returncode == 0
+        except Exception as exc:
+            LOGGER.warning("bluetoothctl script failed: %s", exc)
+            return False
+
+    def _connect_ble(self) -> bool:
+        ok = self._run_bluetoothctl_script(
+            [
+                "power on",
+                "pairable on",
+                "discoverable on",
+                f"system-alias {self.config.ble_name_prefix}",
+            ]
+        )
+        self.ble_ready = ok
+        if ok:
+            LOGGER.info("BLE broadcast ready (alias: %s)", self.config.ble_name_prefix)
+        else:
+            LOGGER.warning("BLE setup failed; check bluetoothctl and adapter state")
+        return ok
+
     def ensure_bluetooth_connected(self, force: bool = False) -> bool:
+        if self.config.bt_transport.lower().strip() == "ble":
+            if self.ble_ready:
+                return True
+            return self.connect_bluetooth()
         if self.bt_serial:
             return True
         now = time.time()
@@ -165,6 +234,10 @@ class RPiScanner:
         return self.connect_bluetooth()
 
     def send_bt_data(self, data: dict) -> None:
+        if self.config.bt_transport.lower().strip() == "ble":
+            self._send_ble_alias_update(data)
+            return
+
         if not self.bt_serial:
             return
         try:
@@ -176,6 +249,32 @@ class RPiScanner:
             except Exception:
                 pass
             self.bt_serial = None
+
+    def _send_ble_alias_update(self, data: dict) -> None:
+        if not self.ble_ready:
+            return
+
+        now = time.time()
+        if (now - self.last_ble_alias_update_ts) < 1.2:
+            return
+
+        status = data.get("status")
+        if status:
+            alias = f"{self.config.ble_name_prefix} {status}"
+        else:
+            level = str(data.get("level", "green")).upper()
+            peak_freq = float(data.get("peak_freq_mhz", 0.0))
+            peak_delta = float(data.get("peak_delta_db", 0.0))
+            alert = "!" if bool(data.get("alert", False)) else "-"
+            alias = f"{self.config.ble_name_prefix} {alert}{level[:1]} {peak_freq:05.1f} {peak_delta:+04.0f}"
+
+        if alias == self.last_ble_alias:
+            return
+
+        ok = self._run_bluetoothctl_script([f"system-alias {alias}"])
+        if ok:
+            self.last_ble_alias = alias
+            self.last_ble_alias_update_ts = now
 
     def _compute_channel_max_from_capture(self, center_freq_hz: float, samples: np.ndarray) -> np.ndarray:
         offsets_hz, power_db = compute_spectrum_db(samples, self.config.sample_rate)
@@ -522,25 +621,27 @@ def run_scanner_mode(args: argparse.Namespace) -> int:
         channels=getattr(args, "channels", 200),
         baseline_cycles=getattr(args, "baseline_cycles", 14),
         scan_delay_sec=getattr(args, "scan_delay_sec", 0.1),
+        bt_transport=getattr(args, "bt_transport", "ble"),
         bt_port=getattr(args, "bt_port", "/dev/rfcomm0"),
         bt_baudrate=getattr(args, "bt_baudrate", 115200),
+        ble_name_prefix=getattr(args, "ble_name_prefix", "TrackScan"),
     )
 
-    used_mac = ensure_rfcomm_device(config.bt_port, getattr(args, "auto_bind_mac", ""))
-
-    if not os.path.exists(config.bt_port):
-        LOGGER.warning(
-            "Bluetooth device %s not found. Pair phone with Pi Bluetooth first; scanner will auto-connect once paired.",
-            config.bt_port,
-        )
-    elif used_mac:
-        LOGGER.info("rfcomm ready on %s using %s", config.bt_port, used_mac)
-    else:
-        LOGGER.info("rfcomm ready on %s", config.bt_port)
+    if config.bt_transport.lower().strip() in {"rfcomm", "auto"}:
+        used_mac = ensure_rfcomm_device(config.bt_port, getattr(args, "auto_bind_mac", ""))
+        if not os.path.exists(config.bt_port):
+            LOGGER.warning(
+                "Bluetooth device %s not found. Pair phone first; fallback to BLE if transport=auto.",
+                config.bt_port,
+            )
+        elif used_mac:
+            LOGGER.info("rfcomm ready on %s using %s", config.bt_port, used_mac)
+        else:
+            LOGGER.info("rfcomm ready on %s", config.bt_port)
 
     scanner = RPiScanner(config)
     if not scanner.ensure_bluetooth_connected(force=True):
-        LOGGER.warning("Continuing without Bluetooth output")
+        LOGGER.warning("Continuing without Bluetooth output (%s)", config.bt_transport)
 
     try:
         scanner.run()
@@ -686,8 +787,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_scan.add_argument("--channels", type=int, default=200)
     p_scan.add_argument("--baseline-cycles", type=int, default=14)
     p_scan.add_argument("--scan-delay-sec", type=float, default=0.1)
+    p_scan.add_argument("--bt-transport", default=os.getenv("BT_TRANSPORT", "ble"), choices=["ble", "rfcomm", "auto"])
     p_scan.add_argument("--bt-port", default="/dev/rfcomm0")
     p_scan.add_argument("--bt-baudrate", type=int, default=115200)
+    p_scan.add_argument("--ble-name-prefix", default=os.getenv("BLE_NAME_PREFIX", "TrackScan"))
     p_scan.add_argument("--auto-bind-mac", default="", help="Optional MAC for auto rfcomm bind")
 
     p_recv = subparsers.add_parser("receiver", help="Run serial/Bluetooth receiver")

@@ -6,12 +6,11 @@ After=network.target bluetooth.target
 Type=simple
 User=test
 SupplementaryGroups=dialout bluetooth
-PermissionsStartOnly=true
 WorkingDirectory=/home/test/trackapp/raspberry-pi
 EnvironmentFile=-/etc/default/rpi_scanner
-ExecStartPre=/bin/sh -c '/usr/bin/rfcomm release /dev/rfcomm0 || true'
-ExecStartPre=/bin/sh -c 'if [ -n "${BT_TARGET_MAC}" ]; then /usr/bin/rfcomm bind /dev/rfcomm0 "${BT_TARGET_MAC}"; fi'
-ExecStart=/home/test/.venvs/rfscan/bin/python /home/test/trackapp/raspberry-pi/rpi_live_scanner.py
+Environment=BT_TRANSPORT=ble
+Environment=BLE_NAME_PREFIX=TrackScan
+ExecStart=/home/test/.venvs/rfscan/bin/python /home/test/trackapp/raspberry-pi/rpi_live_scanner.py scanner --bt-transport ${BT_TRANSPORT}
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
