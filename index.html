@@ -53,6 +53,19 @@
     <main id="appShell" class="app-shell hidden">
       <div id="map"></div>
 
+      <section id="signalScreen" class="signal-screen hidden">
+        <div class="signal-screen-overlay"></div>
+        <div class="signal-center">
+          <div id="signalStatusText" class="signal-status-text">WAITING</div>
+          <div id="signalStatusSub" class="signal-status-sub">Wacht op Raspberry Pi signaal</div>
+          <div id="signalStatusMeta" class="signal-status-meta">Bluetooth: niet verbonden</div>
+          <div class="signal-actions">
+            <button id="signalConnectBtn" type="button">Koppel Raspberry Bluetooth</button>
+            <button id="signalSettingsBtn" type="button">Instellingen</button>
+          </div>
+        </div>
+      </section>
+
       <header class="top-hud">
         <div class="brand-chip">📷 Flitser Alert Pro</div>
         <div class="hud-actions">

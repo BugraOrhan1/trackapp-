@@ -109,6 +109,8 @@ class SDRTestApp:
         self.alert_streak = 0
         self.warmup_cycles = 3
         self.level_text = "WACHT"
+        self.hold_level = "green"
+        self.hold_until = 0.0
 
         # Live denoising/state tracking to suppress fixed mast carriers and random spikes.
         self.delta_ema = np.zeros(self.config.channels, dtype=float)
@@ -158,6 +160,11 @@ class SDRTestApp:
             row=0, column=3
         )
 
+        ttk.Label(control_row, text="Mode").grid(row=0, column=4, padx=(14, 6))
+        self.mode_var = tk.StringVar(value="Snelweg")
+        mode_box = ttk.Combobox(control_row, textvariable=self.mode_var, values=["Stad", "Snelweg"], width=10, state="readonly")
+        mode_box.grid(row=0, column=5)
+
         self.status_canvas = tk.Canvas(top, width=180, height=180, bg="#0b0d10", highlightthickness=0)
         self.status_canvas.grid(row=2, column=0, pady=(4, 4))
         self.status_circle = self.status_canvas.create_oval(18, 18, 162, 162, fill="#00cc4d", outline="#1aff66", width=2)
@@ -186,15 +193,43 @@ class SDRTestApp:
         )
         self.freq_label.grid(row=6, column=0, pady=(0, 8))
 
+        self.conf_label = tk.Label(
+            top,
+            text="Confidence: 0% | Range indicatie: onbekend",
+            bg="#0b0d10",
+            fg="#9fc0ff",
+            font=("Segoe UI", 11, "bold"),
+        )
+        self.conf_label.grid(row=7, column=0, pady=(0, 8))
+
         self.strip_canvas = tk.Canvas(top, width=980, height=36, bg="#121821", highlightthickness=1, highlightbackground="#2a3441")
-        self.strip_canvas.grid(row=7, column=0, pady=(10, 8))
+        self.strip_canvas.grid(row=8, column=0, pady=(10, 8))
 
         strip_labels = tk.Frame(top, bg="#0b0d10")
-        strip_labels.grid(row=8, column=0, sticky="ew")
+        strip_labels.grid(row=9, column=0, sticky="ew")
         strip_labels.columnconfigure(0, weight=1)
         strip_labels.columnconfigure(1, weight=1)
         tk.Label(strip_labels, text=f"{self.config.band_start_mhz:.0f} MHz", bg="#0b0d10", fg="#8e98a8").grid(row=0, column=0, sticky="w")
         tk.Label(strip_labels, text=f"{self.config.band_end_mhz:.0f} MHz", bg="#0b0d10", fg="#8e98a8").grid(row=0, column=1, sticky="e")
+
+        self.capture_canvas = tk.Canvas(
+            top,
+            width=980,
+            height=230,
+            bg="#090d14",
+            highlightthickness=1,
+            highlightbackground="#1f2f4a",
+        )
+        self.capture_canvas.grid(row=10, column=0, pady=(10, 2))
+
+        self.capture_text = tk.Label(
+            top,
+            text="Signal Capture: wacht op live data...",
+            bg="#0b0d10",
+            fg="#9ec8ff",
+            font=("Segoe UI", 10, "bold"),
+        )
+        self.capture_text.grid(row=11, column=0, pady=(0, 8))
 
         buttons = tk.Frame(main, bg="#0b0d10")
         buttons.grid(row=1, column=0, pady=(6, 18))
@@ -384,6 +419,8 @@ class SDRTestApp:
         # Reset live logic so colors remain stable at each fresh start.
         self.monitor_cycle_count = 0
         self.alert_streak = 0
+        self.hold_level = "green"
+        self.hold_until = 0.0
         self._set_state_visual("green")
         self.delta_ema.fill(0.0)
         self.occupancy_ema.fill(0.0)
@@ -408,6 +445,16 @@ class SDRTestApp:
         backend: SDRBackendBase | None = None
         try:
             backend = RTLBackend()
+
+            mode_name = self.mode_var.get().strip().lower()
+            is_highway = mode_name == "snelweg"
+            # Snelwegmodus: sneller/gevoeliger op korte passerende bursts.
+            red_hold_seconds = 1.8 if is_highway else 1.2
+            yellow_hold_seconds = 1.0 if is_highway else 0.7
+            fast_red_margin_db = 7.0 if is_highway else 8.5
+            rise_red_margin_db = 4.0 if is_highway else 5.0
+            yellow_streak_target = 2 if is_highway else 3
+            red_streak_target = 4 if is_highway else 6
 
             while not self.stop_event.is_set():
                 band_power = self._scan_full_band_cycle(backend, self.scan_gain)
@@ -436,6 +483,9 @@ class SDRTestApp:
                 peak_delta = float(temporal_delta[idx])
                 peak_power = float(band_power[idx])
                 peak_freq = float(self.channel_centers_mhz[idx])
+                peak_z = float(zscore[idx])
+                peak_prom = float(prominence[idx])
+                peak_rise = float(delta_rise[idx])
 
                 transient_ok = (~persistent_mask) | (delta_rise >= 2.5)
                 medium_mask = (
@@ -454,8 +504,22 @@ class SDRTestApp:
                 medium_cluster = self._max_cluster_len(medium_mask)
                 strong_cluster = self._max_cluster_len(strong_mask)
 
+                # Fast-pass voor korte maar sterke pieken (klassieke drive-by situatie).
+                fast_red = (
+                    peak_delta >= (self.scan_threshold_db + fast_red_margin_db)
+                    and peak_z >= 4.6
+                    and peak_prom >= 2.1
+                    and bool(transient_ok[idx])
+                )
+                rise_red = (
+                    peak_delta >= (self.scan_threshold_db + rise_red_margin_db)
+                    and peak_rise >= 4.5
+                    and peak_z >= 3.7
+                    and bool(transient_ok[idx])
+                )
+
                 candidate_level = "none"
-                if strong_cluster >= 2:
+                if strong_cluster >= 2 or fast_red or rise_red:
                     candidate_level = "red"
                 elif medium_cluster >= 2:
                     candidate_level = "yellow"
@@ -473,12 +537,25 @@ class SDRTestApp:
                     else:
                         self.alert_streak = max(0, self.alert_streak - 1)
 
-                    if self.alert_streak >= 6:
+                    if self.alert_streak >= red_streak_target:
                         level = "red"
-                    elif self.alert_streak >= 3:
+                    elif self.alert_streak >= yellow_streak_target:
                         level = "yellow"
                     else:
                         level = "green"
+
+                now = time.time()
+                if level == "red":
+                    self.hold_level = "red"
+                    self.hold_until = now + red_hold_seconds
+                elif level == "yellow":
+                    if self.hold_level != "red":
+                        self.hold_level = "yellow"
+                    self.hold_until = max(self.hold_until, now + yellow_hold_seconds)
+                elif now < self.hold_until:
+                    level = self.hold_level
+                else:
+                    self.hold_level = "green"
 
                 # Adapt baseline slowly only for non-alert channels.
                 calm = (temporal_delta < (self.scan_threshold_db * 0.5)) & (~persistent_mask)
@@ -495,12 +572,38 @@ class SDRTestApp:
                             "peak_freq": peak_freq,
                             "level": level,
                             "baseline_at_peak": float(self.baseline_power[idx]),
+                            "peak_z": peak_z,
+                            "peak_prom": peak_prom,
+                            "peak_rise": peak_rise,
+                            "strong_cluster": int(strong_cluster),
+                            "medium_cluster": int(medium_cluster),
+                            "fast_red": bool(fast_red),
+                            "rise_red": bool(rise_red),
                         },
                     )
                 )
 
+                if candidate_level == "yellow" and level == "green":
+                    self.gui_queue.put(
+                        (
+                            "log",
+                            (
+                                f"PRE-ALERT {peak_freq:.3f} MHz | d+{peak_delta:.1f} z{peak_z:.1f} "
+                                f"cM{medium_cluster}/cS{strong_cluster}"
+                            ),
+                        )
+                    )
                 if level != "green":
-                    self.gui_queue.put(("log", f"ALERT {peak_freq:.3f} MHz | Delta +{peak_delta:.1f} dB"))
+                    self.gui_queue.put(
+                        (
+                            "log",
+                            (
+                                f"ALERT {peak_freq:.3f} MHz | d+{peak_delta:.1f} z{peak_z:.1f} p{peak_prom:.1f} r{peak_rise:.1f} "
+                                f"streak={self.alert_streak} cM{medium_cluster}/cS{strong_cluster} "
+                                f"fast={int(fast_red)} rise={int(rise_red)}"
+                            ),
+                        )
+                    )
 
         except Exception as exc:
             self.gui_queue.put(("error", f"Live scan fout: {exc}"))
@@ -536,6 +639,82 @@ class SDRTestApp:
                 b = int(90 - t * 80)
             color = f"#{r:02x}{g:02x}{max(0, b):02x}"
             self.strip_canvas.create_rectangle(x0, 0, x1, height, fill=color, outline="")
+
+    def _draw_signal_capture_panel(self, band_power: np.ndarray) -> None:
+        self.capture_canvas.delete("all")
+        width = int(self.capture_canvas.winfo_width())
+        height = int(self.capture_canvas.winfo_height())
+        if width <= 2 or height <= 2:
+            width = 980
+            height = 230
+
+        # Device-like frame inspired by the Blu Eye style in the reference photo.
+        dev_x0 = max(14, int(width * 0.22))
+        dev_y0 = 14
+        dev_x1 = min(width - 14, int(width * 0.78))
+        dev_y1 = height - 14
+
+        self.capture_canvas.create_rectangle(dev_x0, dev_y0, dev_x1, dev_y1, fill="#11151d", outline="#3b414f", width=2)
+
+        scr_pad = 14
+        scr_x0 = dev_x0 + scr_pad
+        scr_y0 = dev_y0 + scr_pad
+        scr_x1 = dev_x1 - scr_pad
+        scr_y1 = dev_y1 - scr_pad
+        self.capture_canvas.create_rectangle(scr_x0, scr_y0, scr_x1, scr_y1, fill="#0a1018", outline="#1f2733", width=1)
+
+        # Small left side tab and glossy line to mimic hardware appearance.
+        tab_y = int((dev_y0 + dev_y1) / 2)
+        self.capture_canvas.create_rectangle(dev_x0 - 12, tab_y - 22, dev_x0, tab_y + 22, fill="#262b35", outline="#363d4b")
+        self.capture_canvas.create_line(scr_x0, scr_y0 + 12, scr_x1, scr_y0 + 2, fill="#1f3148", width=1)
+
+        self.capture_canvas.create_oval(scr_x0 + 8, scr_y0 + 14, scr_x0 + 24, scr_y0 + 30, fill="#1aa6e8", outline="#79d8ff")
+        self.capture_canvas.create_oval(scr_x0 + 12, scr_y0 + 18, scr_x0 + 20, scr_y0 + 26, fill="#0a1018", outline="")
+        self.capture_canvas.create_text(scr_x0 + 16, scr_y0 + 47, text="))", fill="#1aa6e8", font=("Consolas", 14, "bold"))
+        self.capture_canvas.create_text(scr_x0 + 16, scr_y0 + 66, text="~", fill="#1aa6e8", font=("Consolas", 14, "bold"))
+
+        delta = band_power - self.baseline_power
+        top_idx = np.argsort(delta)[-4:][::-1]
+
+        panel_left = scr_x0 + 40
+        panel_right = scr_x1 - 10
+        panel_bottom = scr_y1 - 18
+        panel_top = scr_y0 + 10
+        bar_width = int((panel_right - panel_left) / 4)
+        seg_count = 10
+
+        for col, idx in enumerate(top_idx):
+            x0 = panel_left + (col * bar_width) + 7
+            x1 = panel_left + ((col + 1) * bar_width) - 7
+            y_span = panel_bottom - panel_top
+            seg_h = max(8, int((y_span - (seg_count - 1) * 3) / seg_count))
+
+            delta_db = float(delta[idx])
+            norm = np.clip((delta_db - (self.scan_threshold_db - 2.0)) / 14.0, 0.0, 1.0)
+            lit = int(round(norm * seg_count))
+
+            for s in range(seg_count):
+                y1 = panel_bottom - (s * (seg_h + 3))
+                y0 = y1 - seg_h
+
+                if s < 4:
+                    on_color = "#33d66f"
+                elif s < 7:
+                    on_color = "#ffd533"
+                else:
+                    on_color = "#ff4a4a"
+
+                color = on_color if s < lit else "#2e3644"
+                self.capture_canvas.create_rectangle(x0, y0, x1, y1, fill=color, outline="#151b26")
+
+            freq = float(self.channel_centers_mhz[idx])
+            self.capture_canvas.create_text(
+                (x0 + x1) / 2,
+                panel_bottom + 12,
+                fill="#c9d2df",
+                font=("Consolas", 9, "bold"),
+                text=f"{freq:.2f}\nd+{delta_db:.1f}",
+            )
 
     @staticmethod
     def _max_cluster_len(mask: np.ndarray) -> int:
@@ -578,9 +757,13 @@ class SDRTestApp:
 
                     baseline_at_peak = float(payload["baseline_at_peak"])
                     level = payload["level"]
+                    peak_z = float(payload.get("peak_z", 0.0))
+                    peak_prom = float(payload.get("peak_prom", 0.0))
+                    peak_rise = float(payload.get("peak_rise", 0.0))
 
                     self._set_state_visual(level)
                     self._draw_channel_strip(self.current_power)
+                    self._draw_signal_capture_panel(self.current_power)
 
                     self.peak_label.configure(text=f"Piek: {self.current_peak_db:.1f} dBFS")
                     self.delta_label.configure(
@@ -590,6 +773,27 @@ class SDRTestApp:
                         text=(
                             f"Sterkste piek: {self.current_peak_freq_mhz:.3f} MHz | "
                             f"200 kanalen ({self.channel_width_khz:.0f} kHz/kanaal)"
+                        )
+                    )
+                    confidence = int(np.clip((self.current_delta_db - self.scan_threshold_db) * 9.0 + (peak_z * 8.0), 0, 99))
+                    if self.current_delta_db >= (self.scan_threshold_db + 10.0):
+                        range_hint = "heel dichtbij"
+                    elif self.current_delta_db >= (self.scan_threshold_db + 6.0):
+                        range_hint = "dichtbij"
+                    elif self.current_delta_db >= (self.scan_threshold_db + 3.0):
+                        range_hint = "middel"
+                    else:
+                        range_hint = "ver"
+                    self.conf_label.configure(
+                        text=(
+                            f"Confidence: {confidence}% | Range indicatie: {range_hint} | "
+                            f"z={peak_z:.1f} p={peak_prom:.1f} r={peak_rise:.1f}"
+                        )
+                    )
+                    self.capture_text.configure(
+                        text=(
+                            f"Signal Capture: top piek {self.current_peak_freq_mhz:.3f} MHz | "
+                            f"delta {self.current_delta_db:+.1f} dB | mode {self.mode_var.get()}"
                         )
                     )
 

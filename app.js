@@ -56,11 +56,17 @@ let btReader = null;
 let btReadLoopActive = false;
 let btLineBuffer = "";
 let btConnected = false;
+let btBleDevice = null;
+let capBleDeviceId = null;
 let lastRfSignalDb = 0;
 let lastRfSignalLevel = "green";
 let lastRfSignalAlert = false;
 let lastRfSignalUpdateAt = 0;
 let rfSignalDecayTimer = null;
+
+function isSignalScreenMode() {
+  return String(window.APP_CONFIG?.uiMode || "").toLowerCase() === "signal";
+}
 
 const SPEED_CAMERA_ALERT_COOLDOWN_MS = 90 * 1000;
 const SPEED_CAMERA_SPEECH_COOLDOWN_MS = 20 * 1000;
@@ -307,6 +313,204 @@ function setBluetoothUiState(connected, text) {
   if (btStatusText) {
     btStatusText.textContent = text || (connected ? "Bluetooth: verbonden" : "Bluetooth: niet verbonden");
   }
+
+  const signalStatusMeta = document.getElementById("signalStatusMeta");
+  if (signalStatusMeta) {
+    signalStatusMeta.textContent = text || (connected ? "Bluetooth: verbonden" : "Bluetooth: niet verbonden");
+  }
+}
+
+function updateSignalScreenVisual(level, valueDb, alert) {
+  const signalScreen = document.getElementById("signalScreen");
+  const signalStatusText = document.getElementById("signalStatusText");
+  const signalStatusSub = document.getElementById("signalStatusSub");
+
+  if (!signalScreen || !signalStatusText || !signalStatusSub) {
+    return;
+  }
+
+  const normalizedLevel = String(level || "green").toLowerCase();
+  signalScreen.classList.remove("status-green", "status-yellow", "status-red", "status-waiting");
+
+  if (normalizedLevel === "red") {
+    signalScreen.classList.add("status-red");
+    signalStatusText.textContent = "RED";
+    signalStatusSub.textContent = `Sterk signaal ${Number(valueDb || 0).toFixed(1)} dB`;
+    return;
+  }
+
+  if (normalizedLevel === "yellow") {
+    signalScreen.classList.add("status-yellow");
+    signalStatusText.textContent = "YELLOW";
+    signalStatusSub.textContent = `Verhoogd signaal ${Number(valueDb || 0).toFixed(1)} dB`;
+    return;
+  }
+
+  if (alert) {
+    signalScreen.classList.add("status-red");
+    signalStatusText.textContent = "RED";
+    signalStatusSub.textContent = `Alert ${Number(valueDb || 0).toFixed(1)} dB`;
+    return;
+  }
+
+  const db = Number(valueDb || 0);
+  if (db > 0.5) {
+    signalScreen.classList.add("status-green");
+    signalStatusText.textContent = "GREEN";
+    signalStatusSub.textContent = `Live signaal ${db.toFixed(1)} dB`;
+  } else {
+    signalScreen.classList.add("status-waiting");
+    signalStatusText.textContent = "WAITING";
+    signalStatusSub.textContent = "Wacht op Raspberry Pi signaal";
+  }
+}
+
+function isLikelyIOS() {
+  const ua = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  return /iPhone|iPad|iPod/i.test(ua) || (/Mac/.test(platform) && "ontouchend" in document);
+}
+
+function getCapacitorBlePlugin() {
+  const cap = window.Capacitor;
+  if (!cap) {
+    return null;
+  }
+  return cap.Plugins?.BluetoothLe || null;
+}
+
+function decodeBase64Utf8(value) {
+  if (!value || typeof value !== "string") {
+    return "";
+  }
+  try {
+    const binary = atob(value);
+    const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return "";
+  }
+}
+
+function applySignalStatusValue(statusText) {
+  const normalized = String(statusText || "").trim().toUpperCase();
+  if (normalized === "GREEN") {
+    updateSignalOrbVisual(3, false, "green", true);
+    return true;
+  }
+  if (normalized === "YELLOW") {
+    updateSignalOrbVisual(8, false, "yellow", true);
+    return true;
+  }
+  if (normalized === "RED") {
+    updateSignalOrbVisual(14, true, "red", true);
+    return true;
+  }
+  return false;
+}
+
+async function connectBluetoothCapacitorBridge() {
+  const plugin = getCapacitorBlePlugin();
+  if (!plugin) {
+    return false;
+  }
+
+  try {
+    setBluetoothUiState(false, "Bluetooth: native BLE verbinden...");
+    await plugin.initialize?.();
+
+    let device = null;
+    try {
+      device = await plugin.requestDevice({ namePrefix: "TrackApp-Pi" });
+    } catch {
+      device = await plugin.requestDevice({ namePrefix: "TrackScan" });
+    }
+
+    const deviceId = device?.deviceId;
+    if (!deviceId) {
+      throw new Error("Geen BLE device geselecteerd");
+    }
+
+    capBleDeviceId = deviceId;
+    await plugin.connect({ deviceId });
+
+    const serviceResult = await plugin.getServices({ deviceId });
+    const services = serviceResult?.services || [];
+
+    let watcherCount = 0;
+    for (const service of services) {
+      const serviceUuid = service.uuid;
+      for (const characteristic of (service.characteristics || [])) {
+        const charUuid = characteristic.uuid;
+        const props = characteristic.properties || {};
+        const notifyCapable = Boolean(props.notify || props.indicate);
+        const readCapable = Boolean(props.read);
+
+        if (notifyCapable) {
+          try {
+            await plugin.startNotifications(
+              {
+                deviceId,
+                service: serviceUuid,
+                characteristic: charUuid,
+              },
+              (result) => {
+                const decoded = decodeBase64Utf8(result?.value || "");
+                if (!decoded) {
+                  return;
+                }
+
+                if (applySignalStatusValue(decoded)) {
+                  return;
+                }
+
+                try {
+                  const json = JSON.parse(decoded);
+                  if (json && typeof json.signal_status === "string") {
+                    applySignalStatusValue(json.signal_status);
+                  } else {
+                    parseBluetoothJsonLine(decoded);
+                  }
+                } catch {
+                  parseBluetoothJsonLine(decoded);
+                }
+              }
+            );
+            watcherCount += 1;
+          } catch {
+          }
+        }
+
+        if (readCapable) {
+          try {
+            const readResult = await plugin.read({
+              deviceId,
+              service: serviceUuid,
+              characteristic: charUuid,
+            });
+            const decoded = decodeBase64Utf8(readResult?.value || "");
+            if (decoded) {
+              if (!applySignalStatusValue(decoded)) {
+                parseBluetoothJsonLine(decoded);
+              }
+            }
+          } catch {
+          }
+        }
+      }
+    }
+
+    btConnected = true;
+    setBluetoothUiState(true, `Bluetooth: native BLE verbonden (${watcherCount} karakteristieken)`);
+    addLogEntry("Native BLE gekoppeld via Capacitor", "success");
+    return true;
+  } catch (error) {
+    addLogEntry(`Native BLE koppeling mislukt: ${error.message || error}`, "warning");
+    setBluetoothUiState(false, "Bluetooth: native BLE koppelen mislukt");
+    capBleDeviceId = null;
+    btConnected = false;
+    return false;
+  }
 }
 
 function getSignalScaleFromDb(valueDb) {
@@ -358,6 +562,8 @@ function updateSignalOrbVisual(valueDb, alert, level = "green", markFresh = true
   if (markFresh) {
     lastRfSignalUpdateAt = Date.now();
   }
+
+  updateSignalScreenVisual(level, safeDb, Boolean(alert));
 }
 
 function startRfSignalDecayLoop() {
@@ -406,6 +612,16 @@ function parseBluetoothJsonLine(line) {
     return;
   }
 
+  if (typeof payload.signal_status === "string") {
+    const state = payload.signal_status.trim().toUpperCase();
+    if (state === "GREEN" || state === "YELLOW" || state === "RED") {
+      const level = state.toLowerCase();
+      const levelDb = state === "RED" ? 14 : state === "YELLOW" ? 8 : 3;
+      updateSignalOrbVisual(levelDb, state === "RED", level, true);
+      return;
+    }
+  }
+
   const displayDb = typeof payload.peak_delta_db === "number"
     ? payload.peak_delta_db
     : (typeof payload.peak_db === "number" ? payload.peak_db : null);
@@ -438,6 +654,23 @@ async function disconnectBluetoothSerial(logMessage = true) {
     btPort = null;
   }
 
+  if (btBleDevice && btBleDevice.gatt && btBleDevice.gatt.connected) {
+    try {
+      btBleDevice.gatt.disconnect();
+    } catch {
+    }
+  }
+  btBleDevice = null;
+
+  const capBle = getCapacitorBlePlugin();
+  if (capBle && capBleDeviceId) {
+    try {
+      await capBle.disconnect({ deviceId: capBleDeviceId });
+    } catch {
+    }
+    capBleDeviceId = null;
+  }
+
   btConnected = false;
   setBluetoothUiState(false, "Bluetooth: niet verbonden");
   updateSignalOrbVisual(0, false, "green", false);
@@ -446,10 +679,80 @@ async function disconnectBluetoothSerial(logMessage = true) {
   }
 }
 
+async function connectBluetoothBleFallback() {
+  if (!("bluetooth" in navigator)) {
+    if (isLikelyIOS()) {
+      addLogEntry("iPhone Safari ondersteunt geen Web Bluetooth voor deze koppeling. Gebruik Bluefy of een Android/desktop browser.", "warning");
+      setBluetoothUiState(false, "Bluetooth: iPhone browser ondersteunt dit niet (gebruik Bluefy)");
+    } else {
+      addLogEntry("Deze browser ondersteunt geen Web Bluetooth.", "warning");
+      setBluetoothUiState(false, "Bluetooth: browser ondersteunt dit niet");
+    }
+    return false;
+  }
+
+  if (!window.isSecureContext) {
+    addLogEntry("Web Bluetooth vereist HTTPS (of localhost). Open de app via https:// of localhost.", "warning");
+    setBluetoothUiState(false, "Bluetooth: HTTPS vereist voor BLE");
+    return false;
+  }
+
+  try {
+    setBluetoothUiState(false, "Bluetooth: kies TrackScan BLE apparaat...");
+
+    btBleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "TrackScan" }],
+      optionalServices: [],
+    });
+
+    if (btBleDevice && btBleDevice.gatt) {
+      await btBleDevice.gatt.connect();
+    }
+
+    btConnected = true;
+    setBluetoothUiState(true, "Bluetooth: BLE gekoppeld (iPhone modus)");
+    addLogEntry("BLE gekoppeld. iPhone modus actief.", "success");
+
+    btBleDevice.addEventListener("gattserverdisconnected", () => {
+      btConnected = false;
+      btBleDevice = null;
+      setBluetoothUiState(false, "Bluetooth: BLE verbinding verbroken");
+      updateSignalOrbVisual(0, false, "green", false);
+      addLogEntry("BLE verbinding verbroken", "info");
+    }, { once: true });
+    return true;
+  } catch (error) {
+    addLogEntry(`BLE koppeling mislukt: ${error.message || error}`, "warning");
+    setBluetoothUiState(false, "Bluetooth: BLE koppelen mislukt");
+    btBleDevice = null;
+    btConnected = false;
+    return false;
+  }
+}
+
 async function connectBluetoothSerial() {
+  const nativeConnected = await connectBluetoothCapacitorBridge();
+  if (nativeConnected) {
+    return;
+  }
+
+  // BLE first: your Pi setup is BLE-based, so prefer this path.
+  if ("bluetooth" in navigator) {
+    const bleOk = await connectBluetoothBleFallback();
+    if (bleOk) {
+      return;
+    }
+    addLogEntry("BLE niet gekoppeld, probeer seriele poort als fallback.", "info");
+  }
+
   if (!("serial" in navigator)) {
-    addLogEntry("Deze browser ondersteunt geen Web Serial. Gebruik Chrome/Edge over HTTPS.", "warning");
-    setBluetoothUiState(false, "Bluetooth: browser ondersteunt dit niet");
+    if (isLikelyIOS()) {
+      addLogEntry("iPhone ondersteunt hier geen Web Serial. Gebruik BLE via HTTPS/localhost of Bluefy.", "warning");
+      setBluetoothUiState(false, "Bluetooth: iPhone serial niet ondersteund");
+    } else {
+      addLogEntry("Deze browser ondersteunt geen Web Serial.", "warning");
+      setBluetoothUiState(false, "Bluetooth: browser ondersteunt dit niet");
+    }
     return;
   }
 
@@ -487,6 +790,9 @@ async function connectBluetoothSerial() {
     }
   } catch (error) {
     addLogEntry(`Bluetooth connectie mislukt: ${error.message || error}`, "warning");
+    if (error && error.name === "NotFoundError") {
+      addLogEntry("Geen seriele apparaten gevonden. Gebruik BLE (TrackScan) of sluit een seriele adapter aan.", "info");
+    }
     setBluetoothUiState(false, "Bluetooth: verbinden mislukt");
   } finally {
     if (btConnected) {
@@ -2090,14 +2396,30 @@ function startAppIfNeeded() {
     };
   }
 
-  createMap();
-  startGpsTracking();
-  loadLevelFromStatusFile();
-  loadReports();
-  startRealtimeReportsSync();
+  if (!isSignalScreenMode()) {
+    createMap();
+    startGpsTracking();
+    loadLevelFromStatusFile();
+    loadReports();
+    startRealtimeReportsSync();
+  }
+
+  const appShell = document.getElementById("appShell");
+  const signalScreen = document.getElementById("signalScreen");
+  if (isSignalScreenMode()) {
+    appShell?.classList.add("signal-mode");
+    signalScreen?.classList.remove("hidden");
+    updateSignalScreenVisual("green", 0, false);
+  } else {
+    appShell?.classList.remove("signal-mode");
+    signalScreen?.classList.add("hidden");
+  }
+
   setBluetoothUiState(false, "Bluetooth: niet verbonden");
   updateSignalOrbVisual(0, false, "green");
-  updatePublicCameraButton();
+  if (!isSignalScreenMode()) {
+    updatePublicCameraButton();
+  }
   startRfSignalDecayLoop();
   addLogEntry("✅ Flitser Alert Pro gestart", "success");
   appStarted = true;
@@ -2315,6 +2637,18 @@ on("connectBtBtn", "click", async () => {
   }
 
   await connectBluetoothSerial();
+});
+
+on("signalConnectBtn", "click", async () => {
+  if (btConnected) {
+    await disconnectBluetoothSerial(true);
+    return;
+  }
+  await connectBluetoothSerial();
+});
+
+on("signalSettingsBtn", "click", () => {
+  togglePanel("settingsPanel", true);
 });
 
 window.addEventListener("beforeunload", () => {

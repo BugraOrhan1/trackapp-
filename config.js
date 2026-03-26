@@ -3,8 +3,9 @@ const __isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostna
 window.APP_CONFIG = {
   apiBaseUrl: __isLocalHost ? "/api" : "/.netlify/functions",
   appName: "Flitser Alert Pro",
-  // Local: true (use local auth/database), hosted: false by default.
-  requireAuth: __isLocalHost,
+  uiMode: "signal",
+  // Temporary: auth/login/register disabled.
+  requireAuth: false,
   // Demo profile used when requireAuth is false.
   demoUser: {
     id: "demo-user",

@@ -8,11 +8,20 @@
     "start": "node local-server.js",
     "dev": "npx netlify dev",
     "serve": "npx netlify dev",
-    "deploy": "npx netlify deploy --prod"
+    "deploy": "npx netlify deploy --prod",
+    "cap:sync": "npx cap sync ios",
+    "cap:add:ios": "npx cap add ios",
+    "cap:open:ios": "npx cap open ios"
   },
   "dependencies": {
+    "@capacitor-community/bluetooth-le": "^6.0.0",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/ios": "^6.1.2",
     "@neondatabase/serverless": "^0.10.4",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
   }
 }
