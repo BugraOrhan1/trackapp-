@@ -27,7 +27,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: deploy-69a45f5d76b3d9a8db15a3b4
+        working-directory: .
 
     steps:
       - name: Checkout
@@ -38,7 +38,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: deploy-69a45f5d76b3d9a8db15a3b4/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -64,7 +64,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ios-unsigned-xcarchive
-          path: deploy-69a45f5d76b3d9a8db15a3b4/ios/App/build/App-unsigned.xcarchive
+          path: ios/App/build/App-unsigned.xcarchive
 
       - name: Configure code signing files
         if: ${{ env.IOS_CERT_BASE64 != '' && env.IOS_PROFILE_BASE64 != '' && env.IOS_TEAM_ID != '' && env.IOS_PROFILE_NAME != '' && env.IOS_BUNDLE_ID != '' }}
@@ -132,4 +132,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ios-signed-ipa
-          path: deploy-69a45f5d76b3d9a8db15a3b4/ios/App/build/export/*.ipa
+          path: ios/App/build/export/*.ipa
