@@ -117,6 +117,8 @@ class SDRTestApp:
         self.occupancy_ema = np.zeros(self.config.channels, dtype=float)
         self.delta_history: deque[np.ndarray] = deque(maxlen=6)
 
+        self.target_pattern: np.ndarray | None = None
+        self.target_similarity: float = 0.0
         self._build_ui()
         self._poll_queue()
         self._start_bootstrap_baseline()
@@ -284,8 +286,49 @@ class SDRTestApp:
         self.marker_label = tk.Label(buttons, text="Laatste marker: geen", bg="#0b0d10", fg="#bec6d3", font=("Segoe UI", 10))
         self.marker_label.grid(row=3, column=0, columnspan=2, pady=(10, 2))
 
+
+        self.btn_learn = tk.Button(
+            buttons,
+            text="Leer target",
+            bg="#1a8cff",
+            fg="white",
+            activebackground="#1566b3",
+            activeforeground="white",
+            width=12,
+            height=2,
+            command=self._learn_target,
+            relief="flat",
+        )
+        self.btn_learn.grid(row=5, column=0, columnspan=2, pady=(10, 2))
+
+        self.sim_label = tk.Label(buttons, text="Target match: nee | Similarity: 0%", bg="#0b0d10", fg="#8ecfff", font=("Segoe UI", 10, "bold"))
+        self.sim_label.grid(row=6, column=0, columnspan=2, pady=(2, 2))
+
         self.log_label = tk.Label(buttons, text="Bereid voor scan...", bg="#0b0d10", fg="#bec6d3", font=("Segoe UI", 10))
-        self.log_label.grid(row=4, column=0, columnspan=2)
+        self.log_label.grid(row=7, column=0, columnspan=2)
+
+    def _learn_target(self) -> None:
+        # Save the current power spectrum as the target pattern
+        if self.current_power is not None and np.any(np.isfinite(self.current_power)):
+            self.target_pattern = self.current_power.copy()
+            self._log("Target patroon opgeslagen!")
+        else:
+            self._log("Geen geldig spectrum om op te slaan.")
+
+    @staticmethod
+    def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+        # Cosine similarity between two vectors
+        if a is None or b is None:
+            return 0.0
+        a = np.asarray(a)
+        b = np.asarray(b)
+        if a.shape != b.shape:
+            return 0.0
+        num = np.dot(a, b)
+        denom = np.linalg.norm(a) * np.linalg.norm(b)
+        if denom == 0:
+            return 0.0
+        return float(num / denom)
 
     def _set_marker(self, marker: str) -> None:
         self.last_marker = marker
@@ -749,6 +792,7 @@ class SDRTestApp:
                         self.btn_start.configure(state="disabled")
                         self._log("Calibratie mislukt: controleer RTL-SDR verbinding.")
 
+
                 elif event == "cycle":
                     self.current_power = payload["band_power"]
                     self.current_peak_db = float(payload["peak_power"])
@@ -760,6 +804,22 @@ class SDRTestApp:
                     peak_z = float(payload.get("peak_z", 0.0))
                     peak_prom = float(payload.get("peak_prom", 0.0))
                     peak_rise = float(payload.get("peak_rise", 0.0))
+
+                    # Target pattern similarity logic
+                    similarity = 0.0
+                    match = False
+                    if self.target_pattern is not None:
+                        similarity = self._cosine_similarity(self.current_power, self.target_pattern)
+                        self.target_similarity = similarity
+                        match = similarity > 0.96  # Threshold for match (tune as needed)
+                        sim_pct = int(similarity * 100)
+                        self.sim_label.configure(
+                            text=f"Target match: {'ja' if match else 'nee'} | Similarity: {sim_pct}%"
+                        )
+                    else:
+                        self.sim_label.configure(
+                            text="Target match: nee | Similarity: 0%"
+                        )
 
                     self._set_state_visual(level)
                     self._draw_channel_strip(self.current_power)

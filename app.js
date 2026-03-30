@@ -57,6 +57,7 @@ let btReadLoopActive = false;
 let btLineBuffer = "";
 let btConnected = false;
 let btBleDevice = null;
+let btBleLineBuffer = "";
 let capBleDeviceId = null;
 let lastRfSignalDb = 0;
 let lastRfSignalLevel = "green";
@@ -392,6 +393,48 @@ function decodeBase64Utf8(value) {
   }
 }
 
+function decodeDataViewUtf8(dataView) {
+  if (!dataView) {
+    return "";
+  }
+
+  try {
+    const bytes = new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength);
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return "";
+  }
+}
+
+function consumeBluetoothTextChunk(chunk) {
+  const text = String(chunk || "").replace(/\r/g, "");
+  if (!text) {
+    return;
+  }
+
+  const trimmed = text.trim();
+  if (trimmed && applySignalStatusValue(trimmed)) {
+    return;
+  }
+
+  btBleLineBuffer += text;
+  let newlineIndex = btBleLineBuffer.indexOf("\n");
+  while (newlineIndex !== -1) {
+    const rawLine = btBleLineBuffer.slice(0, newlineIndex).trim();
+    btBleLineBuffer = btBleLineBuffer.slice(newlineIndex + 1);
+    if (rawLine) {
+      if (!applySignalStatusValue(rawLine)) {
+        parseBluetoothJsonLine(rawLine);
+      }
+    }
+    newlineIndex = btBleLineBuffer.indexOf("\n");
+  }
+
+  if (btBleLineBuffer.length > 4096) {
+    btBleLineBuffer = btBleLineBuffer.slice(-2048);
+  }
+}
+
 function applySignalStatusValue(statusText) {
   const normalized = String(statusText || "").trim().toUpperCase();
   if (normalized === "GREEN") {
@@ -529,6 +572,28 @@ function getSignalPulseFromDb(valueDb, alert) {
   return base + (normalized / 18) * 0.16;
 }
 
+function mapRfSignalToCircleLevel(valueDb, alert, level) {
+  const normalizedLevel = String(level || "").toLowerCase();
+  if (Boolean(alert) || normalizedLevel === "red") {
+    return 3;
+  }
+  if (normalizedLevel === "yellow") {
+    return 2;
+  }
+  if (normalizedLevel === "green") {
+    return 1;
+  }
+
+  const safeDb = Number.isFinite(Number(valueDb)) ? Number(valueDb) : 0;
+  if (safeDb >= 12) {
+    return 3;
+  }
+  if (safeDb >= 6) {
+    return 2;
+  }
+  return 1;
+}
+
 function updateSignalOrbVisual(valueDb, alert, level = "green", markFresh = true) {
   const rfSignalOrb = document.getElementById("rfSignalOrb");
   const rfSignalText = document.getElementById("rfSignalText");
@@ -562,6 +627,9 @@ function updateSignalOrbVisual(valueDb, alert, level = "green", markFresh = true
   if (markFresh) {
     lastRfSignalUpdateAt = Date.now();
   }
+
+  // Keep the map circle around the car in sync with Raspberry BLE risk status.
+  updateCircleByLevel(mapRfSignalToCircleLevel(safeDb, alert, level));
 
   updateSignalScreenVisual(level, safeDb, Boolean(alert));
 }
@@ -699,23 +767,76 @@ async function connectBluetoothBleFallback() {
 
   try {
     setBluetoothUiState(false, "Bluetooth: kies TrackScan BLE apparaat...");
+    btBleLineBuffer = "";
 
     btBleDevice = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: "TrackScan" }],
-      optionalServices: [],
+      optionalServices: [
+        "6e400001-b5a3-f393-e0a9-e50e24dcca9e",
+        "0000ffe0-0000-1000-8000-00805f9b34fb",
+        "device_information",
+        "battery_service",
+      ],
     });
 
     if (btBleDevice && btBleDevice.gatt) {
-      await btBleDevice.gatt.connect();
+      const server = await btBleDevice.gatt.connect();
+      const services = await server.getPrimaryServices();
+      let watcherCount = 0;
+
+      for (const service of services) {
+        let characteristics = [];
+        try {
+          characteristics = await service.getCharacteristics();
+        } catch {
+          continue;
+        }
+
+        for (const characteristic of characteristics) {
+          const properties = characteristic.properties || {};
+
+          if (properties.notify || properties.indicate) {
+            try {
+              await characteristic.startNotifications();
+              characteristic.addEventListener("characteristicvaluechanged", (event) => {
+                const dataView = event?.target?.value;
+                const decoded = decodeDataViewUtf8(dataView);
+                if (decoded) {
+                  consumeBluetoothTextChunk(decoded);
+                }
+              });
+              watcherCount += 1;
+            } catch {
+            }
+          }
+
+          if (properties.read) {
+            try {
+              const value = await characteristic.readValue();
+              const decoded = decodeDataViewUtf8(value);
+              if (decoded) {
+                consumeBluetoothTextChunk(decoded);
+              }
+            } catch {
+            }
+          }
+        }
+      }
+
+      if (watcherCount <= 0) {
+        addLogEntry("BLE gekoppeld maar geen notify karakteristieken gevonden", "warning");
+      }
+
+      setBluetoothUiState(true, `Bluetooth: BLE gekoppeld (${watcherCount} karakteristieken)`);
+      addLogEntry(`BLE gekoppeld via browser (${watcherCount} karakteristieken)`, "success");
     }
 
     btConnected = true;
-    setBluetoothUiState(true, "Bluetooth: BLE gekoppeld (iPhone modus)");
-    addLogEntry("BLE gekoppeld. iPhone modus actief.", "success");
 
     btBleDevice.addEventListener("gattserverdisconnected", () => {
       btConnected = false;
       btBleDevice = null;
+      btBleLineBuffer = "";
       setBluetoothUiState(false, "Bluetooth: BLE verbinding verbroken");
       updateSignalOrbVisual(0, false, "green", false);
       addLogEntry("BLE verbinding verbroken", "info");
