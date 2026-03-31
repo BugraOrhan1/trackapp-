@@ -1,0 +1,32 @@
+Net,From,To,Direction,Notes
++5V_IN,J2.1,U3.IN,Power,Main 5V input
+GND,J2.2,All GND pins,Power,Common ground
++3V3,U3.OUT,U1.3V3,Power,MCU supply
++3V3,U3.OUT,U2.VDD,Power,RF transceiver supply
++5V_IN,C7.1,C7.2->GND,Decoupling,Input bulk cap
++3V3,C8.1,C8.2->GND,Decoupling,Output bulk cap
++3V3,C1.1,C1.2->GND,Decoupling,Near ESP32
++3V3,C2.1,C2.2->GND,Decoupling,Near ESP32
++3V3,C5.1,C5.2->GND,Decoupling,Near Si4463
++3V3,C6.1,C6.2->GND,Decoupling,Near Si4463
++3V3,C3.1,C3.2->GND,HF Decoupling,Extra RF bypass
++3V3,C4.1,C4.2->GND,HF Decoupling,Extra RF bypass
+RF_CS,U1.GPIO5,U2.NSEL,Digital,SPI chip select
+RF_SCK,U1.GPIO18,U2.SCLK,Digital,SPI clock
+RF_MOSI,U1.GPIO23,U2.SDI,Digital,SPI MOSI
+RF_MISO,U1.GPIO19,U2.SDO,Digital,SPI MISO
+RF_IRQ,U2.NIRQ,U1.GPIO4,Digital,Interrupt line
+RF_SDN,U1.GPIO27,U2.SDN,Digital,Shutdown control
+RF_ANT,U2.RF,FL1.IN,RF,Start RF chain
+RF_ANT,FL1.OUT,L1/C9/C10 network,RF,Matching stage
+RF_ANT,Matching output,J1.CENTER,RF,To antenna
+GND,J1.SHIELD,Ground plane,RF,Shield return
+STATUS_LED,U1.GPIO2,R1.1,Digital,Status output
+STATUS_LED,R1.2,D1.ANODE,Digital,LED current limit
+GND,D1.CATHODE,Ground plane,Digital,LED return
+RF_CS,TP1,Probe,Debug,Test point
+RF_SCK,TP2,Probe,Debug,Test point
+RF_MOSI,TP3,Probe,Debug,Test point
+RF_MISO,TP4,Probe,Debug,Test point
+RF_IRQ,TP5,Probe,Debug,Test point
+RF_SDN,TP6,Probe,Debug,Test point

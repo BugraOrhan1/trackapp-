@@ -1,0 +1,8 @@
+[build]
+  publish = "."
+  command = "echo 'No build step required'"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200

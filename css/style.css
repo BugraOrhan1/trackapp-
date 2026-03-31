@@ -1,0 +1,67 @@
+body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #f7f7fa;
+    color: #222;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 500px;
+    margin: 40px auto;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    padding: 32px 24px 24px 24px;
+}
+
+h1 {
+    text-align: center;
+    color: #2a7ae2;
+    margin-bottom: 24px;
+}
+
+button {
+    background: #2a7ae2;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 1rem;
+    margin: 8px 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+button:disabled {
+    background: #b0c4e7;
+    cursor: not-allowed;
+}
+button:hover:not(:disabled) {
+    background: #185ca1;
+}
+
+#status, #location {
+    font-size: 1.1rem;
+    margin: 12px 0 8px 0;
+    padding: 8px 12px;
+    background: #f0f4fa;
+    border-radius: 6px;
+}
+
+#route-list {
+    margin: 0;
+    padding: 0 0 0 18px;
+    font-size: 0.98rem;
+}
+
+#route-list li {
+    margin-bottom: 4px;
+    color: #444;
+}
+
+#footer {
+    text-align: center;
+    color: #aaa;
+    font-size: 0.95rem;
+    margin-top: 32px;
+}

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrackApp BLE Webapp</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>TrackApp BLE Webapp</h1>
+        <div id="status">Niet verbonden</div>
+        <div id="location">Locatie onbekend</div>
+        <div style="margin: 18px 0;">
+            <button id="connect-btn">Verbinden</button>
+            <button id="disconnect-btn" disabled>Verbreek</button>
+            <button id="tracking-btn" disabled>Start Tracking</button>
+            <button id="route-btn" disabled>Toon Route</button>
+            <button id="clear-route-btn" disabled>Wis Route</button>
+        </div>
+        <ul id="route-list"></ul>
+    </div>
+    <div id="footer">&copy; 2024 BugraOrhan1 | TrackApp BLE</div>
+    <script src="js/ble-manager.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        // Enable/disable buttons based on BLE connection
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const trackingBtn = document.getElementById('tracking-btn');
+        const routeBtn = document.getElementById('route-btn');
+        const clearRouteBtn = document.getElementById('clear-route-btn');
+        
+        function updateButtons(connected) {
+            disconnectBtn.disabled = !connected;
+            trackingBtn.disabled = !connected;
+            routeBtn.disabled = !connected;
+            clearRouteBtn.disabled = !connected;
+        }
+        
+        connectBtn.addEventListener('click', () => updateButtons(true));
+        disconnectBtn.addEventListener('click', () => updateButtons(false));
+    </script>
+</body>
+</html>
