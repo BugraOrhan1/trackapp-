@@ -1,57 +1,36 @@
-# 🔧 TrackApp Raspberry Pi Server
+# Raspberry Pi Setup (Zero 2 W + RTL2832U)
 
-## 🚀 Quick Start
+Deze map bevat de backend voor BLE JSON streaming naar je telefoon-webapp.
 
+## Bestanden
+- `target_blue_eye_scanner.py`: scanner met baseline scan + peak detectie
+- `ble_server.py`: BlueZ D-Bus GATT server
+- `install.sh`: systeem dependencies + python venv
+- `start_ble.sh`: start bluetooth + BLE server
+
+## Installatie
 ```bash
-# 1. Installeer dependencies
 sudo ./install.sh
+```
 
-# 2. Start BLE server
+## Starten
+```bash
 sudo ./start_ble.sh
 ```
 
-## 📡 RTL-SDR (Optioneel)
-- Hardware: RTL2832U USB Dongle
-- Frequentie: 380-400 MHz
+## Commands vanuit webapp
+- `{ "action": "start_scan" }`
+- `{ "action": "stop_scan" }`
+- `{ "action": "baseline" }`
+- `{ "action": "ping" }`
 
-### Setup
-- Sluit RTL-SDR aan op Raspberry Pi
-- Run: `sudo ./install.sh` (kies 'y' voor RTL support)
-- Reboot: `sudo reboot`
-- Test: `rtl_test`
+## BLE kenmerken
+- Service: `4fafc201-1fb5-459e-8fcc-c5c9c331914b`
+- Detections (read/notify): `beb5483e-36e1-4688-b7f5-ea07361b26a8`
+- Command (write): `cba1d466-344c-4be3-ab3f-189f80dd7518`
+- Status (read): `d4e1e2f3-4a5b-6c7d-8e9f-0a1b2c3d4e5f`
 
-### Troubleshooting
-- RTL-SDR niet gevonden:
-  ```bash
-  lsusb | grep RTL
-  # Moet een Realtek device tonen
-  ```
-- Permission denied:
-  ```bash
-  sudo usermod -a -G plugdev $USER
-  # Logout en login
-  ```
-
-## 🔧 Files
-- ble_tracker_server_dbus.py - Main BLE server
-- rtl_scanner.py - RTL-SDR scanner
-- install.sh - Dependency installer
-- start_ble.sh - Server starter
-
-## 📊 Features
-- ✅ BLE GATT Server
-- ✅ Location tracking
-- ✅ RTL-SDR proximity detection
-- ✅ Route history
-- ✅ Web Bluetooth compatible
-
-## 🆘 Help
-- Server start niet:
-  ```bash
-  sudo systemctl status bluetooth
-  sudo hciconfig hci0 up
-  ```
-- Python errors:
-  ```bash
-  python3 -c "import dbus; import gi; print('OK')"
-  ```
+## Notes
+- `dbus` en `gi` komen uit apt packages op de Pi.
+- Editor waarschuwingen op Windows over deze imports kun je negeren.
+- Voor audio alerts in webapp: voeg `sounds/alert.mp3` toe.

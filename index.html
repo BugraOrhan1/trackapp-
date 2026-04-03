@@ -3,43 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TrackApp BLE Webapp</title>
+    <title>TrackApp - Hulpdiensten Detectie</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>TrackApp BLE Webapp</h1>
-        <div id="status">Niet verbonden</div>
-        <div id="location">Locatie onbekend</div>
-        <div style="margin: 18px 0;">
-            <button id="connect-btn">Verbinden</button>
-            <button id="disconnect-btn" disabled>Verbreek</button>
-            <button id="tracking-btn" disabled>Start Tracking</button>
-            <button id="route-btn" disabled>Toon Route</button>
-            <button id="clear-route-btn" disabled>Wis Route</button>
-        </div>
-        <ul id="route-list"></ul>
-    </div>
-    <div id="footer">&copy; 2024 BugraOrhan1 | TrackApp BLE</div>
+    <div id="alertBanner" class="alert-banner">Geen actieve melding</div>
+
+    <header class="topbar">
+        <h1>TrackApp</h1>
+        <div id="connectionBadge" class="badge bad">Niet verbonden</div>
+    </header>
+
+    <main class="layout">
+        <section class="map-wrap">
+            <div id="map"></div>
+        </section>
+
+        <section class="panel controls">
+            <h2>Bediening</h2>
+            <div class="btn-row">
+                <button id="btnConnect">Verbind</button>
+                <button id="btnDisconnect" disabled>Verbreek</button>
+                <button id="btnBaseline" disabled>Baseline</button>
+                <button id="btnStartScanner" disabled>Start scan</button>
+                <button id="btnStopScanner" disabled>Stop scan</button>
+            </div>
+            <p id="statusText">Wachten op verbinding...</p>
+        </section>
+
+        <section class="panel list-wrap">
+            <h2>Detecties</h2>
+            <div class="legend">
+                <span><i class="dot red"></i>&lt; 1 km</span>
+                <span><i class="dot orange"></i>1-5 km</span>
+                <span><i class="dot yellow"></i>5-15 km</span>
+                <span><i class="dot green"></i>&gt; 15 km</span>
+            </div>
+            <div id="detectionsList" class="detections-list"></div>
+        </section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="js/ble-manager.js"></script>
+    <script src="js/emergency-display.js"></script>
     <script src="js/app.js"></script>
-    <script>
-        // Enable/disable buttons based on BLE connection
-        const connectBtn = document.getElementById('connect-btn');
-        const disconnectBtn = document.getElementById('disconnect-btn');
-        const trackingBtn = document.getElementById('tracking-btn');
-        const routeBtn = document.getElementById('route-btn');
-        const clearRouteBtn = document.getElementById('clear-route-btn');
-        
-        function updateButtons(connected) {
-            disconnectBtn.disabled = !connected;
-            trackingBtn.disabled = !connected;
-            routeBtn.disabled = !connected;
-            clearRouteBtn.disabled = !connected;
-        }
-        
-        connectBtn.addEventListener('click', () => updateButtons(true));
-        disconnectBtn.addEventListener('click', () => updateButtons(false));
-    </script>
 </body>
 </html>

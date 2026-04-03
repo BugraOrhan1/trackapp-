@@ -1,143 +1,97 @@
+# TrackApp
 
-# 📍 TrackApp - Bluetooth Low Energy Tracking System
+TrackApp is een Target Blue Eye style project: een Raspberry Pi Zero 2 W met RTL2832U scant 380-400 MHz, stuurt detecties als JSON via BLE naar de telefoon, en de webapp toont die live op een kaart met cirkels en alerts.
 
-Real-time tracking applicatie met BLE communicatie tussen Raspberry Pi en web browser.
-
-## 🚀 Features
-
-- ✅ Real-time locatie tracking via BLE
-- ✅ Bidirectionele communicatie (Raspberry Pi ↔ Browser)
-- ✅ Route geschiedenis en visualisatie
-- ✅ Auto-verzenden van browser locatie
-- ✅ Interactive kaart met Leaflet
-- ✅ Responsive modern design
-
-## 📋 Requirements
-
-### Raspberry Pi
-- Raspberry Pi 3/4/5 of Zero W (met Bluetooth)
-- Raspbian/Raspberry Pi OS
-- Python 3.7+
-- BlueZ Bluetooth stack
-
-### Web Browser
-- Chrome 56+ / Edge 79+ / Opera 43+
-- HTTPS verbinding (of localhost)
-- Web Bluetooth API support
-
-## 🔧 Installatie
-
-### 1. Raspberry Pi Setup
+## Eerst runnen
 
 ```bash
-# Clone repository
-git clone https://github.com/BugraOrhan1/trackapp-.git
-cd trackapp-/raspberry-pi
+# 1. Download het project van GitHub
+ git clone https://github.com/BugraOrhan1/trackapp-.git
 
-# Installeer dependencies
+# 2. Ga naar de projectmap
+cd trackapp-
+
+# 3. Installeer Raspberry Pi dependencies
+cd raspberry-pi
 sudo ./install.sh
 
-# Start BLE server
+# 4. Start de BLE server
 sudo ./start_ble.sh
 ```
 
-### 2. Web App Setup
+## Webapp starten
 
 ```bash
-# Open index.html in browser (via HTTPS of localhost)
-# Of gebruik een webserver:
+# Ga terug naar de project root
+cd ..
+
+# Start een lokale webserver voor Web Bluetooth
 python3 -m http.server 8000
-# Open: http://localhost:8000
 ```
 
-## 📖 Gebruik
-- Start Raspberry Pi server: `sudo ./start_ble.sh`
-- Open web app in Chrome/Edge
-- Klik "Verbind met Raspberry Pi"
-- Selecteer "TrackApp-RPI" in popup
-- Start tracking en zie real-time updates!
+Open daarna in Chrome of Edge:
 
-## 🔑 BLE UUIDs
-
-- Service:  4fafc201-1fb5-459e-8fcc-c5c9c331914b
-- Location: beb5483e-36e1-4688-b7f5-ea07361b26a8
-- Command:  cba1d466-344c-4be3-ab3f-189f80dd7518
-- Status:   d4e1e2f3-4a5b-6c7d-8e9f-0a1b2c3d4e5f
-
-## 🐛 Troubleshooting
-
-- Browser kan device niet vinden
-   - Check of Raspberry Pi server draait
-   - Gebruik Chrome/Edge (niet Firefox/Safari)
-   - Moet via HTTPS of localhost
-- Permission denied op Raspberry Pi
-   - `sudo python3 ble_tracker_server_dbus.py`
-- Verbinding valt weg
-   - Check bereik (max 10-30 meter)
-   - Verminder WiFi interferentie
-
-## 📁 Projectstructuur
-
-```
-trackapp/
-├── raspberry-pi/
-│   ├── ble_tracker_server_dbus.py
-│   ├── rtl_scanner.py
-│   ├── install.sh
-│   ├── start_ble.sh
-│   └── README.md
-├── js/
-│   ├── ble-manager.js
-│   └── app.js
-├── css/
-│   └── style.css
-├── index.html
-└── README.md
+```text
+http://localhost:8000
 ```
 
-## 👨‍💻 Auteur
-BugraOrhan1
+## Snel testen zonder Raspberry Pi
 
-GitHub: @BugraOrhan1
+Gebruik mock mode om de UI nu al te testen:
 
-## 📄 Licentie
-MIT License - zie LICENSE file voor details
+```text
+http://localhost:8000/?mock=1
+```
 
-## Inhoud
-- raspberry-pi/ble_tracker_server.py — Python BLE server voor Raspberry Pi (BLE peripheral)
-- raspberry-pi/requirements.txt — Python dependencies
-- raspberry-pi/start_ble.sh — Startscript voor BLE server
-- js/ble-manager.js — Web Bluetooth manager (client)
-- js/app.js — Webapp logica
-- css/style.css — Stijlen voor webapp
-- index.html — Webapp UI
+Daarmee zie je direct:
+- Verbinding status
+- Live detecties
+- Proximity cirkels
+- Alert banner
+- Audio/speech/vibration flow
 
-## Installatie (Raspberry Pi)
-1. Installeer dependencies:
-   ```bash
-   sudo apt update
-   sudo apt install python3-pip python3-dbus bluetooth bluez
-   cd raspberry-pi
-   sudo pip3 install -r requirements.txt
-   ```
-2. Start de BLE server:
-   ```bash
-   sudo ./start_ble.sh
-   ```
+## Hoe het werkt
 
-## Gebruik (Webapp)
-1. Open `index.html` in een ondersteunde browser (Chrome/Edge met Web Bluetooth).
-2. Klik op "Verbinden" en selecteer het TrackApp BLE device.
-3. Gebruik de knoppen om tracking te starten/stoppen, route op te vragen of te wissen.
+- De RTL2832U scant de C2000-band tussen 380 en 400 MHz.
+- De scanner meet eerst een baseline/noise floor.
+- Daarna zoekt hij pieken boven baseline + threshold.
+- De BLE server zet detecties om naar JSON en publiceert die via notify/read.
+- De webapp leest die JSON en past de kaart en cirkels aan.
+
+## Belangrijkste bestanden
+
+- [raspberry-pi/target_blue_eye_scanner.py](raspberry-pi/target_blue_eye_scanner.py)
+- [raspberry-pi/ble_server.py](raspberry-pi/ble_server.py)
+- [js/ble-manager.js](js/ble-manager.js)
+- [js/emergency-display.js](js/emergency-display.js)
+- [js/app.js](js/app.js)
+- [index.html](index.html)
+- [css/style.css](css/style.css)
 
 ## BLE UUIDs
-- **Service UUID:** 4fafc201-1fb5-459e-8fcc-c5c9c331914b
-- **Location Characteristic:** beb5483e-36e1-4688-b7f5-ea07361b26a8
-- **Command Characteristic:** cba1d466-344c-4be3-ab3f-189f80dd7518
-- **Status Characteristic:** d4e1e2f3-4a5b-6c7d-8e9f-0a1b2c3d4e5f
 
-## Auteur
-BugraOrhan1
+- Service: `4fafc201-1fb5-459e-8fcc-c5c9c331914b`
+- Detections: `beb5483e-36e1-4688-b7f5-ea07361b26a8`
+- Command: `cba1d466-344c-4be3-ab3f-189f80dd7518`
+- Status: `d4e1e2f3-4a5b-6c7d-8e9f-0a1b2c3d4e5f`
+
+## Raspberry Pi install notities
+
+De Pi gebruikt alleen system packages voor BLE:
+- `python3-dbus`
+- `python3-gi`
+- `bluez`
+
+De installer maakt daarnaast een `.venv` voor RTL-SDR Python packages, zodat je geen PEP 668 problemen krijgt.
+
+## Troubleshooting
+
+- Web Bluetooth werkt alleen in Chrome of Edge.
+- Gebruik `http://localhost:8000` of HTTPS.
+- Op de Pi moet Bluetooth actief zijn: `sudo systemctl status bluetooth`.
+- Als de RTL dongle niet gevonden wordt, test met `rtl_test`.
+- Als je alleen de UI wilt testen, gebruik `?mock=1`.
 
 ## Licentie
+
 MIT

@@ -13,7 +13,7 @@ echo "🔄 Package lijst updaten..."
 apt update
 
 echo "📦 System packages installeren..."
-apt install -y python3-dbus python3-gi python3-gi-cairo gir1.2-gtk-3.0 bluetooth bluez
+apt install -y python3-dbus python3-gi python3-gi-cairo gir1.2-gtk-3.0 bluetooth bluez python3-venv python3-full
 
 echo "📡 RTL-SDR packages (optioneel)..."
 read -p "RTL-SDR support installeren? (y/n): " -n 1 -r
@@ -24,8 +24,13 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo 'blacklist dvb_usb_rtl28xxu' > /etc/modprobe.d/blacklist-rtl-sdr.conf
         echo "✅ RTL-SDR kernel driver blacklisted"
     fi
-    echo "🐍 Python RTL-SDR library..."
-    pip3 install pyrtlsdr numpy --break-system-packages
+    echo "🐍 Python virtual environment voorbereiden..."
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ ! -d "$SCRIPT_DIR/.venv" ]; then
+        python3 -m venv "$SCRIPT_DIR/.venv"
+    fi
+    "$SCRIPT_DIR/.venv/bin/pip" install --upgrade pip
+    "$SCRIPT_DIR/.venv/bin/pip" install pyrtlsdr numpy
     echo "⚠️  REBOOT vereist voor RTL-SDR!"
     echo "   Na reboot: sudo ./start_ble.sh"
 else
@@ -40,4 +45,8 @@ echo "✅ Installatie compleet!"
 echo ""
 echo "Volgende stap:"
 echo "  sudo ./start_ble.sh"
+echo ""
+echo "Als je handmatig wilt testen met de venv:"
+echo "  source .venv/bin/activate"
+echo "  python3 ble_server.py"
 echo ""

@@ -1,114 +1,120 @@
-// TrackApp Webapp Main JS
-// Auteur: BugraOrhan1
-// Versie: 1.0
+let bleManager;
+let emergencyDisplay;
+let userWatchId = null;
 
-const ble = new BLEManager();
+function updateConnectionUI(connected) {
+    const badge = document.getElementById("connectionBadge");
+    const connectBtn = document.getElementById("btnConnect");
+    const disconnectBtn = document.getElementById("btnDisconnect");
+    const startBtn = document.getElementById("btnStartScanner");
+    const stopBtn = document.getElementById("btnStopScanner");
 
-// UI Elements
-const connectBtn = document.getElementById('connect-btn');
-const disconnectBtn = document.getElementById('disconnect-btn');
-const statusEl = document.getElementById('status');
-const locationEl = document.getElementById('location');
-const trackingBtn = document.getElementById('tracking-btn');
-const routeBtn = document.getElementById('route-btn');
-const clearRouteBtn = document.getElementById('clear-route-btn');
-const routeList = document.getElementById('route-list');
+    if (badge) {
+        badge.textContent = connected ? "Verbonden" : "Niet verbonden";
+        badge.classList.toggle("ok", connected);
+        badge.classList.toggle("bad", !connected);
+    }
 
-let trackingActive = false;
-let routeHistory = [];
-
-function updateStatusUI(status) {
-    statusEl.textContent = `Status: ${status.status} | Battery: ${status.battery}% | Uptime: ${status.uptime}s`;
-    trackingActive = status.tracking_active;
-    trackingBtn.textContent = trackingActive ? 'Stop Tracking' : 'Start Tracking';
+    if (connectBtn) connectBtn.disabled = connected;
+    if (disconnectBtn) disconnectBtn.disabled = !connected;
+    if (startBtn) startBtn.disabled = !connected;
+    if (stopBtn) stopBtn.disabled = !connected;
 }
 
-function updateLocationUI(location) {
-    locationEl.textContent = `Lat: ${location.latitude}, Lng: ${location.longitude}, Acc: ${location.accuracy}m, Speed: ${location.speed}m/s`;
+function setStatusText(text) {
+    const status = document.getElementById("statusText");
+    if (status) status.textContent = text;
 }
 
-function updateRouteUI(route) {
-    routeList.innerHTML = '';
-    route.forEach((point, idx) => {
-        const li = document.createElement('li');
-        li.textContent = `${idx + 1}: ${point.lat}, ${point.lng} (${point.timestamp})`;
-        routeList.appendChild(li);
+function startUserLocation() {
+    if (!navigator.geolocation || userWatchId !== null) return;
+
+    userWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            emergencyDisplay.updateUserPosition(lat, lng);
+        },
+        (err) => {
+            console.warn("Geolocation error", err);
+        },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    bleManager = new BLEManager();
+    emergencyDisplay = new EmergencyServiceDisplay({
+        mapId: "map",
+        alertId: "alertBanner",
+        listId: "detectionsList",
     });
-}
 
-connectBtn.addEventListener('click', async () => {
-    connectBtn.disabled = true;
-    const ok = await ble.connect();
-    if (ok) {
-        statusEl.textContent = 'Verbonden!';
-        disconnectBtn.disabled = false;
-        connectBtn.disabled = true;
-        await refreshStatus();
-        await refreshLocation();
-    } else {
-        statusEl.textContent = 'Verbinding mislukt!';
-        connectBtn.disabled = false;
+    updateConnectionUI(false);
+    startUserLocation();
+
+    if (bleManager.mockMode) {
+        setStatusText("Mock mode actief: open met ?mock=1 voor UI test zonder Pi.");
     }
-});
 
-disconnectBtn.addEventListener('click', async () => {
-    await ble.disconnect();
-    statusEl.textContent = 'Niet verbonden';
-    disconnectBtn.disabled = true;
-    connectBtn.disabled = false;
-});
+    bleManager.onConnectionChange = (connected) => {
+        updateConnectionUI(connected);
+        setStatusText(connected ? "BLE verbonden met Raspberry Pi" : "BLE niet verbonden");
+    };
 
-ble.onDisconnectCallback = () => {
-    statusEl.textContent = 'Verbinding verbroken';
-    disconnectBtn.disabled = true;
-    connectBtn.disabled = false;
-};
+    bleManager.onDetectionsUpdate = (payload) => {
+        emergencyDisplay.updateDetections(payload);
+        const count = payload && payload.detections ? payload.detections.length : 0;
+        setStatusText(`Live update: ${count} detectie(s)`);
+    };
 
-async function refreshStatus() {
-    if (!ble.isConnected) return;
-    const status = await ble.readStatus();
-    if (status) updateStatusUI(status);
-}
+    bleManager.onError = (error) => {
+        console.error("BLE error", error);
+        setStatusText(`Fout: ${error.message || error}`);
+    };
 
-async function refreshLocation() {
-    if (!ble.isConnected) return;
-    const location = await ble.readLocation();
-    if (location) updateLocationUI(location);
-}
+    const btnConnect = document.getElementById("btnConnect");
+    const btnDisconnect = document.getElementById("btnDisconnect");
+    const btnStart = document.getElementById("btnStartScanner");
+    const btnStop = document.getElementById("btnStopScanner");
+    const btnBaseline = document.getElementById("btnBaseline");
 
-trackingBtn.addEventListener('click', async () => {
-    if (!ble.isConnected) return;
-    if (trackingActive) {
-        await ble.sendCommand({ action: 'stop_tracking' });
-    } else {
-        await ble.sendCommand({ action: 'start_tracking' });
-    }
-    setTimeout(refreshStatus, 500);
-});
-
-routeBtn.addEventListener('click', async () => {
-    if (!ble.isConnected) return;
-    await ble.sendCommand({ action: 'get_route' });
-    setTimeout(async () => {
-        const location = await ble.readLocation();
-        if (location && location.route) {
-            routeHistory = location.route;
-            updateRouteUI(routeHistory);
+    if (btnConnect) btnConnect.addEventListener("click", async () => {
+        setStatusText("Bezig met verbinden...");
+        const ok = await bleManager.connect();
+        if (ok) {
+            const payload = await bleManager.readDetections();
+            if (payload) emergencyDisplay.updateDetections(payload);
+            const status = await bleManager.readStatus();
+            if (status) setStatusText(`Scanner status: ${status.status}`);
+        } else {
+            setStatusText("Verbinding mislukt");
         }
-    }, 500);
-});
+    });
 
-clearRouteBtn.addEventListener('click', async () => {
-    if (!ble.isConnected) return;
-    await ble.sendCommand({ action: 'clear_route' });
-    routeHistory = [];
-    updateRouteUI(routeHistory);
-});
+    if (btnDisconnect) btnDisconnect.addEventListener("click", () => {
+        bleManager.disconnect();
+        setStatusText("Verbinding verbroken");
+    });
 
-// Auto-refresh status & location every 5s
-setInterval(() => {
-    if (ble.isConnected) {
-        refreshStatus();
-        refreshLocation();
-    }
-}, 5000);
+    if (btnStart) btnStart.addEventListener("click", async () => {
+        const ok = await bleManager.startScanner();
+        setStatusText(ok ? "Scanner gestart" : "Scanner kon niet starten");
+    });
+
+    if (btnStop) btnStop.addEventListener("click", async () => {
+        const ok = await bleManager.stopScanner();
+        setStatusText(ok ? "Scanner gestopt" : "Scanner kon niet stoppen");
+    });
+
+    if (btnBaseline) btnBaseline.addEventListener("click", async () => {
+        const ok = await bleManager.baselineScan();
+        setStatusText(ok ? "Baseline scan gestart" : "Baseline scan kon niet starten");
+    });
+
+    setInterval(async () => {
+        if (!bleManager.isConnected()) return;
+        const payload = await bleManager.readDetections();
+        if (payload) emergencyDisplay.updateDetections(payload);
+    }, 5000);
+});

@@ -13,10 +13,13 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 
 # Check if Python script exists
-if [ ! -f "ble_tracker_server_dbus.py" ]; then
-    echo "❌ ble_tracker_server_dbus.py niet gevonden!"
+if [ ! -f "ble_server.py" ]; then
+    echo "❌ ble_server.py niet gevonden!"
     exit 1
 fi
 
@@ -48,7 +51,11 @@ echo ""
 # Start Python server
 echo "🐍 BLE Server starten..."
 echo ""
-python3 ble_tracker_server_dbus.py
+if [ -f ".venv/bin/python" ]; then
+    .venv/bin/python ble_server.py
+else
+    python3 ble_server.py
+fi
 
 echo ""
 echo "👋 Server gestopt"
