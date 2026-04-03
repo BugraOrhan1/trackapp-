@@ -94,8 +94,8 @@
 
       <section id="alertLog" class="alert-log glass minimized">
         <div class="log-header">
-          <span>📋 Live Log</span>
-          <button id="clearLog" class="clear-btn">Wissen</button>
+          <span>📋 Activiteiten</span>
+          <button id="clearLog" class="clear-btn">Leegmaken</button>
         </div>
         <div id="logEntries" class="log-entries">
           <div class="log-entry log-info">Systeem gestart</div>
@@ -104,29 +104,29 @@
 
       <div class="fab-stack">
         <div id="actionMenu" class="action-menu hidden">
-          <button id="quickReportBtn" class="menu-btn">⚠️ Melding</button>
+          <button id="quickReportBtn" class="menu-btn">⚠️ Melding maken</button>
           <button id="openSettingsBtn" class="menu-btn">⚙️ Instellingen</button>
           <button id="openProfileBtn" class="menu-btn">👤 Profiel</button>
-          <button id="toggleLogBtn" class="menu-btn">📋 Log</button>
+          <button id="toggleLogBtn" class="menu-btn">📋 Activiteiten</button>
           <button id="toggleReportsBtn" class="menu-btn">📢 Meldingen</button>
-          <button id="centerMapBtn" class="menu-btn">🎯 Centreer</button>
+          <button id="centerMapBtn" class="menu-btn">🎯 Mijn locatie tonen</button>
           <button id="logoutBtn" class="menu-btn danger">🚪 Uitloggen</button>
         </div>
         <button id="actionFab" class="fab" title="Menu">＋</button>
       </div>
 
-      <button id="followMapBtn" class="follow-btn glass hidden" title="Volg mijn locatie">🧭 Volg mij</button>
+      <button id="followMapBtn" class="follow-btn glass hidden" title="Kaart centreren">🎯 Centreren</button>
 
       <button id="reportBtn" class="fab hidden" title="Plaats melding">⚠️</button>
 
       <div id="reportModal" class="modal">
         <div class="modal-content">
           <div class="modal-header">
-            <h2>📍 Melding plaatsen</h2>
+            <h2>📍 Melding doorgeven</h2>
             <button id="closeModal" class="close-btn">✕</button>
           </div>
           <div class="modal-body">
-            <p class="modal-hint">Melding wordt geplaatst op je huidige locatie</p>
+            <p class="modal-hint">Uw melding wordt gedeeld op uw huidige locatie</p>
             <div class="report-grid">
               <button class="report-option" data-type="flitser-50">📷<br><span>Flitser 50</span></button>
               <button class="report-option" data-type="flitser-80">📷<br><span>Flitser 80</span></button>
@@ -135,7 +135,7 @@
               <button class="report-option" data-type="ongeluk">💥<br><span>Ongeluk</span></button>
               <button class="report-option" data-type="file">🚗<br><span>File</span></button>
               <button class="report-option" data-type="object">⚠️<br><span>Object</span></button>
-              <button class="report-option" data-type="anders">❓<br><span>Anders</span></button>
+              <button class="report-option" data-type="anders">❓<br><span>Overig</span></button>
             </div>
           </div>
         </div>
@@ -168,27 +168,27 @@
                 <option value="night">Nacht</option>
               </select>
             </label>
-            <label class="switch-row">Auto center kaart
+            <label class="switch-row">Kaart automatisch volgen
               <input id="autoCenterToggle" type="checkbox" checked />
             </label>
-            <label class="switch-row">Spraak alerts
+            <label class="switch-row">Spraakmeldingen
               <input id="voiceToggle" type="checkbox" checked />
             </label>
-            <label class="switch-row">Toon debug info
+            <label class="switch-row">Technische details tonen
               <input id="debugInfoToggle" type="checkbox" />
             </label>
             <div class="pi-connection-card">
               <div class="pi-connection-head">
                 <strong>Raspberry Pi</strong>
-                <span id="piConnectionStatus" class="pi-status">Niet verbonden</span>
+                <span id="piConnectionStatus" class="pi-status">Verbinding niet actief</span>
               </div>
               <p>Verbind met de Pi via BLE om live detecties te ontvangen.</p>
               <div class="pi-connection-actions">
-                <button id="connectPiBtn" type="button">Verbind Pi</button>
-                <button id="disconnectPiBtn" type="button" disabled>Verbreek</button>
+                <button id="connectPiBtn" type="button">Verbind met Raspberry Pi</button>
+                <button id="disconnectPiBtn" type="button" disabled>Verbinding verbreken</button>
               </div>
             </div>
-            <button id="testCameraAlertBtn" type="button">🧪 Test flitser-alert</button>
+            <button id="testCameraAlertBtn" type="button">🧪 Voorbeeldwaarschuwing</button>
           </div>
         </div>
       </div>

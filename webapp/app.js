@@ -1285,20 +1285,20 @@ function updateCircleByLevel(level) {
 function setDemoLocation() {
   updateMapLocation(52.0116, 4.7571);
   const mapInfo = document.getElementById("mapInfo");
-  mapInfo.textContent = "Testlocatie actief (GPS fallback): 52.01160, 4.75710";
+  mapInfo.textContent = "Standaardlocatie actief: 52.01160, 4.75710";
 }
 
 function startGpsTracking() {
   if (!navigator.geolocation) {
     const mapInfo = document.getElementById("mapInfo");
-    mapInfo.textContent = "GPS niet ondersteund in deze browser. Gebruik testlocatie.";
+    mapInfo.textContent = "Locatieservices worden niet ondersteund in deze browser. Standaardlocatie wordt gebruikt.";
     setDemoLocation();
     return;
   }
 
   if (!window.isSecureContext && window.location.hostname !== "localhost") {
     const mapInfo = document.getElementById("mapInfo");
-    mapInfo.textContent = "GPS geblokkeerd: open via HTTPS of gebruik testlocatie.";
+    mapInfo.textContent = "Locatieservices zijn geblokkeerd. Open de app via HTTPS; standaardlocatie wordt gebruikt.";
     setDemoLocation();
     return;
   }
@@ -1314,11 +1314,11 @@ function startGpsTracking() {
     (error) => {
       const mapInfo = document.getElementById("mapInfo");
       if (error && error.code === 1) {
-        mapInfo.textContent = "Locatie geweigerd. Sta locatie toe of gebruik testlocatie.";
+        mapInfo.textContent = "Locatietoegang is geweigerd. Standaardlocatie wordt gebruikt.";
       } else if (error && error.code === 2) {
-        mapInfo.textContent = "Locatie niet beschikbaar. Gebruik testlocatie.";
+        mapInfo.textContent = "Locatie is momenteel niet beschikbaar. Standaardlocatie wordt gebruikt.";
       } else {
-        mapInfo.textContent = "GPS timeout/fout. Gebruik testlocatie.";
+        mapInfo.textContent = "Locatieservice reageert niet. Standaardlocatie wordt gebruikt.";
       }
       setDemoLocation();
     },
@@ -2027,7 +2027,7 @@ on("registerForm", "submit", async (event) => {
 on("logoutBtn", "click", async () => {
   if (isLocalMode()) {
     toggleActionMenu(false);
-    addLogEntry("Lokale modus blijft actief", "info");
+    addLogEntry("Offline modus blijft beschikbaar", "info");
     return;
   }
 
@@ -2060,7 +2060,7 @@ on("centerMapBtn", "click", () => {
     manualFollowPaused = false;
     updateFollowButtonVisibility();
     map.panTo([latestUserLocation.lat, latestUserLocation.lng], { animate: true, duration: 0.35 });
-    addLogEntry("Kaart gecentreerd", "info");
+    addLogEntry("Kaart gecentreerd op uw locatie", "info");
   }
   toggleActionMenu(false);
 });
@@ -2095,7 +2095,7 @@ on("autoCenterToggle", "change", (event) => {
   }
   saveSettings();
   updateFollowButtonVisibility();
-  addLogEntry(`Auto center ${settings.autoCenter ? "aan" : "uit"}`, "info");
+  addLogEntry(`Automatisch volgen ${settings.autoCenter ? "ingeschakeld" : "uitgeschakeld"}`, "info");
 });
 
 on("mapThemeSelect", "change", (event) => {
@@ -2116,14 +2116,14 @@ on("followMapBtn", "click", () => {
   saveSettings();
   updateUISettings();
   map.panTo([latestUserLocation.lat, latestUserLocation.lng], { animate: true, duration: 0.35 });
-  addLogEntry("Volg mij weer actief", "success");
+  addLogEntry("Kaart volgt uw locatie opnieuw", "success");
 });
 
 on("debugInfoToggle", "change", (event) => {
   settings.showDebugInfo = Boolean(event.target.checked);
   saveSettings();
   updateUISettings();
-  addLogEntry(`Debug info ${settings.showDebugInfo ? "aan" : "uit"}`, "info");
+  addLogEntry(`Technische details ${settings.showDebugInfo ? "ingeschakeld" : "uitgeschakeld"}`, "info");
 });
 
 on("saveProfileBtn", "click", () => {
@@ -2136,11 +2136,11 @@ on("saveProfileBtn", "click", () => {
 
 on("testCameraAlertBtn", "click", () => {
   const testDistance = Math.max(70, Math.round((settings.speedCameraAlertRadius || 450) * 0.5));
-  const message = `Flitser voor op ${testDistance} meter`;
+  const message = `Snelheidscontrole op ${testDistance} meter`;
   playAlertSound(testDistance <= 120 ? 3 : 2);
   speakFlitserWarning(testDistance);
-  showNotification("Test flitser-alert", message, 2);
-  addLogEntry(`🧪 Test: ${message}`, "warning");
+  showNotification("Voorbeeldwaarschuwing", message, 2);
+  addLogEntry(`🧪 Voorbeeld: ${message}`, "warning");
 });
 
 on("clearLog", "click", () => {
