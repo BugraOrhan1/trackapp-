@@ -37,6 +37,7 @@ let lastManualMapInteractionAt = 0;
 let lastSpeed = 0;
 let lastPosition = null;
 let lastPositionTime = null;
+let hasReliableGpsFix = false;
 let lastSpeechAt = 0;
 let lastDataLoadTime = 0;
 let lastDataLoadCenter = null;
@@ -1114,34 +1115,12 @@ function createMap() {
     iconAnchor: [13, 13],
   });
 
-  userMarker = L.marker([latestUserLocation.lat, latestUserLocation.lng], { 
+  userMarker = L.marker([latestUserLocation.lat, latestUserLocation.lng], {
     icon: carIcon,
-    draggable: true  // Make it draggable!
+    draggable: false
   })
     .addTo(map)
-    .bindPopup("🚗 Jouw auto (sleep me!)");
-
-  // Handle dragging
-  userMarker.on("dragstart", () => {
-    lastManualMapInteractionAt = Date.now();
-    if (settings.autoCenter) {
-      manualFollowPaused = true;
-      updateFollowButtonVisibility();
-    }
-    addLogEntry("Auto wordt verplaatst...", "info");
-  });
-
-  userMarker.on("dragend", (e) => {
-    const newPos = e.target.getLatLng();
-    latestUserLocation = { lat: newPos.lat, lng: newPos.lng };
-    alertCircle.setLatLng([newPos.lat, newPos.lng]);
-    // updateEmergencyMarker(currentLevel); // Disabled - focus on speed cameras
-    
-    const mapInfo = document.getElementById("mapInfo");
-    mapInfo.textContent = settings.showDebugInfo ? `Handmatig: ${newPos.lat.toFixed(5)}, ${newPos.lng.toFixed(5)}` : '';
-    mapInfo.style.display = settings.showDebugInfo ? 'block' : 'none';
-    addLogEntry(`Auto verplaatst naar ${newPos.lat.toFixed(4)}, ${newPos.lng.toFixed(4)}`, "success");
-  });
+    .bindPopup("🚗 Uw voertuigpositie");
 
   const initialEmergency = movePoint(latestUserLocation.lat, latestUserLocation.lng, 320, 35);
   // Emergency marker disabled - focus on speed cameras only
@@ -1191,43 +1170,49 @@ function createMap() {
   }, 1000);
 }
 
-function updateMapLocation(latitude, longitude) {
+function updateMapLocation(latitude, longitude, speedMetersPerSecond = null, accuracyMeters = null) {
   if (!map || !userMarker || !alertCircle) {
     return;
   }
 
-  // Calculate speed with smooth decay
   const currentTime = Date.now();
-  let calculatedSpeed = lastSpeed;
-  
-  if (lastPosition && lastPositionTime) {
-    const timeDiff = (currentTime - lastPositionTime) / 1000; // seconds
+  let measuredSpeedKmh = null;
+
+  if (Number.isFinite(speedMetersPerSecond) && speedMetersPerSecond >= 0) {
+    measuredSpeedKmh = speedMetersPerSecond * 3.6;
+  } else if (lastPosition && lastPositionTime) {
+    const timeDiff = (currentTime - lastPositionTime) / 1000;
     const distance = getDistanceMeters(lastPosition.lat, lastPosition.lng, latitude, longitude);
-    
-    if (timeDiff > 0) {
-      const rawSpeed = (distance / timeDiff) * 3.6; // Convert m/s to km/h
-      
-      // Smooth speed updates: 70% new value, 30% old value (low-pass filter)
-      calculatedSpeed = lastSpeed * 0.3 + rawSpeed * 0.7;
-      
-      // When barely moving, apply exponential decay to speed
-      if (distance < 2) {
-        calculatedSpeed = calculatedSpeed * 0.5; // Heavy damping when stationary
+    if (timeDiff >= 0.8 && timeDiff <= 12) {
+      measuredSpeedKmh = (distance / timeDiff) * 3.6;
+
+      if (Number.isFinite(accuracyMeters) && accuracyMeters > 0) {
+        const noiseDistance = Math.max(accuracyMeters, 8);
+        if (distance < noiseDistance * 0.6) {
+          measuredSpeedKmh = 0;
+        }
       }
-      
-      lastSpeed = calculatedSpeed;
-      
-      // Calculate bearing from movement if GPS heading not available
+
       if (currentHeading === 0 || currentHeading === null || currentHeading === undefined) {
         currentHeading = calculateBearing(lastPosition.lat, lastPosition.lng, latitude, longitude);
       }
     }
   }
+
+  if (!Number.isFinite(measuredSpeedKmh)) {
+    measuredSpeedKmh = lastSpeed * 0.9;
+  }
+
+  measuredSpeedKmh = Math.max(0, Math.min(measuredSpeedKmh, 230));
+
+  const filterAlpha = measuredSpeedKmh < 8 ? 0.18 : 0.3;
+  const smoothedSpeedKmh = lastSpeed + (measuredSpeedKmh - lastSpeed) * filterAlpha;
+  lastSpeed = smoothedSpeedKmh;
   
   lastPosition = { lat: latitude, lng: longitude };
   lastPositionTime = currentTime;
 
-  const speedKmh = Math.max(0, Math.round(lastSpeed));
+  const speedKmh = Math.max(0, Math.round(smoothedSpeedKmh));
   if (speedKmh <= 2) {
     accelStartTime = Date.now();
   } else if (speedKmh >= 100 && accelStartTime) {
@@ -1301,7 +1286,7 @@ function updateCircleByLevel(level) {
 }
 
 function setDemoLocation() {
-  updateMapLocation(52.0116, 4.7571);
+  updateMapLocation(52.0116, 4.7571, 0, 0);
   const mapInfo = document.getElementById("mapInfo");
   mapInfo.textContent = "Standaardlocatie actief: 52.01160, 4.75710";
 }
@@ -1309,41 +1294,49 @@ function setDemoLocation() {
 function startGpsTracking() {
   if (!navigator.geolocation) {
     const mapInfo = document.getElementById("mapInfo");
-    mapInfo.textContent = "Locatieservices worden niet ondersteund in deze browser. Standaardlocatie wordt gebruikt.";
-    setDemoLocation();
+    mapInfo.textContent = "Locatieservices worden niet ondersteund in deze browser.";
     return;
   }
 
   if (!window.isSecureContext && window.location.hostname !== "localhost") {
     const mapInfo = document.getElementById("mapInfo");
-    mapInfo.textContent = "Locatieservices zijn geblokkeerd. Open de app via HTTPS; standaardlocatie wordt gebruikt.";
-    setDemoLocation();
+    mapInfo.textContent = "Locatieservices zijn geblokkeerd. Open de app via HTTPS.";
     return;
   }
 
   navigator.geolocation.watchPosition(
     (position) => {
-      const { latitude, longitude, heading } = position.coords;
+      const { latitude, longitude, heading, speed, accuracy } = position.coords;
+
+      if (Number.isFinite(accuracy)) {
+        if (!hasReliableGpsFix && accuracy <= 40) {
+          hasReliableGpsFix = true;
+        }
+
+        if (hasReliableGpsFix && accuracy > 120) {
+          return;
+        }
+      }
+
       if (heading !== null && heading !== undefined && !isNaN(heading)) {
         currentHeading = heading;
       }
-      updateMapLocation(latitude, longitude);
+      updateMapLocation(latitude, longitude, speed, accuracy);
     },
     (error) => {
       const mapInfo = document.getElementById("mapInfo");
       if (error && error.code === 1) {
-        mapInfo.textContent = "Locatietoegang is geweigerd. Standaardlocatie wordt gebruikt.";
+        mapInfo.textContent = "Locatietoegang is geweigerd. Geef toegang om live positie te tonen.";
       } else if (error && error.code === 2) {
-        mapInfo.textContent = "Locatie is momenteel niet beschikbaar. Standaardlocatie wordt gebruikt.";
+        mapInfo.textContent = "Locatie is momenteel niet beschikbaar.";
       } else {
-        mapInfo.textContent = "Locatieservice reageert niet. Standaardlocatie wordt gebruikt.";
+        mapInfo.textContent = "Locatieservice reageert niet.";
       }
-      setDemoLocation();
     },
     {
       enableHighAccuracy: true,
-      maximumAge: 3000,
-      timeout: 8000,
+      maximumAge: 0,
+      timeout: 15000,
     }
   );
 }
@@ -2069,7 +2062,7 @@ on("applyBtn", "click", () => {
 });
 
 on("demoLocBtn", "click", () => {
-  setDemoLocation();
+  addLogEntry("Handmatige demomodus is uitgeschakeld.", "warning");
 });
 
 on("centerMapBtn", "click", () => {
