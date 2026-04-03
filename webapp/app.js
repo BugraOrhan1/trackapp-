@@ -44,6 +44,7 @@ let lastCameraCheckTime = 0;
 let currentHeading = 0;
 let accelStartTime = null;
 let lastZeroToHundredMs = null;
+let lastPublicDataErrorAt = 0;
 let currentUser = null;
 let authAccessToken = null;
 let authRefreshToken = null;
@@ -58,6 +59,7 @@ const SPEED_CAMERA_ALERT_COOLDOWN_MS = 90 * 1000;
 const SPEED_CAMERA_SPEECH_COOLDOWN_MS = 20 * 1000;
 const DATA_CACHE_TIME_MS = 10 * 60 * 1000; // 10 minuten cache
 const MIN_RELOAD_DISTANCE_M = 10000; // 10km - herladen als ver verplaatst
+const PUBLIC_DATA_RETRY_COOLDOWN_MS = 60 * 1000;
 const FAST_LOAD_RADIUS_KM = 20;
 const FULL_LOAD_RADIUS_KM = 50;
 const MAP_RECENTER_PAUSE_MS = 8000;
@@ -513,6 +515,10 @@ function getDistanceMeters(lat1, lon1, lat2, lon2) {
   return earthRadius * c;
 }
 
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  return getDistanceMeters(lat1, lon1, lat2, lon2);
+}
+
 function calculateBearing(lat1, lon1, lat2, lon2) {
   const dLon = toRad(lon2 - lon1);
   const y = Math.sin(dLon) * Math.cos(toRad(lat2));
@@ -926,6 +932,13 @@ async function loadPublicSpeedCameras(forceReload = false) {
     return;
   }
 
+  if (!forceReload && lastPublicDataErrorAt > 0) {
+    const errorAge = Date.now() - lastPublicDataErrorAt;
+    if (errorAge < PUBLIC_DATA_RETRY_COOLDOWN_MS) {
+      return;
+    }
+  }
+
   // Smart caching: alleen herladen als data oud is OF kaart ver verplaatst is
   if (!forceReload && publicCamerasLoaded) {
     const now = Date.now();
@@ -1030,6 +1043,7 @@ async function loadPublicSpeedCameras(forceReload = false) {
     publicCameraCount = added;
     publicCameraStats = stats;
     publicCamerasLoaded = true;
+    lastPublicDataErrorAt = 0;
     publicCameraLayer.addTo(map);
     lastDataLoadTime = Date.now();
     lastDataLoadCenter = latestUserLocation || map.getCenter();
@@ -1040,7 +1054,12 @@ async function loadPublicSpeedCameras(forceReload = false) {
     addLogEntry(`✅ ${totalCameras} flitsers geladen (${modeLabel}, ${radiusKm * 2}x${radiusKm * 2}km)`, "success");
     checkSpeedCameraProximityAlerts();
   } catch (error) {
-    addLogEntry(`Openbare data laden mislukt: ${error.message}`, "warning");
+    lastPublicDataErrorAt = Date.now();
+    if (String(error?.message || "").includes("504")) {
+      addLogEntry("Kaartdata-service is tijdelijk traag. Er wordt automatisch later opnieuw geprobeerd.", "warning");
+    } else {
+      addLogEntry(`Openbare data laden mislukt: ${error.message}`, "warning");
+    }
   } finally {
     loadingPublicCameras = false;
     updatePublicCameraButton();
