@@ -1,0 +1,29 @@
+functionsDirectory = "C:\\Users\\pobug\\Desktop\\hulpdiensten dedectie app\\web app\\upload\\netlify\\functions"
+functionsDirectoryOrigin = "config-v1"
+plugins = []
+headers = []
+redirects = []
+
+[build]
+publish = "C:\\Users\\pobug\\Desktop\\hulpdiensten dedectie app\\web app\\upload"
+publishOrigin = "default"
+functions = "C:\\Users\\pobug\\Desktop\\hulpdiensten dedectie app\\web app\\upload\\netlify\\functions"
+
+  [build.environment]
+
+  [build.processing]
+
+    [build.processing.css]
+
+    [build.processing.html]
+
+    [build.processing.images]
+
+    [build.processing.js]
+
+  [build.services]
+
+[functions]
+
+  [functions."*"]
+  node_bundler = "esbuild"

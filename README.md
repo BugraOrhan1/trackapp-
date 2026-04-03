@@ -28,7 +28,20 @@ sudo ./install.sh
 sudo ./start_ble.sh
 ```
 
-## Webapp starten
+## Webapp op GitHub Pages (aanrader)
+
+De webapp wordt nu automatisch gedeployed naar GitHub Pages via GitHub Actions.
+
+1. Push je wijzigingen naar `main`.
+2. Ga in GitHub naar `Actions` en wacht op workflow `Deploy Webapp to GitHub Pages`.
+3. Open daarna je site op:
+	- `https://<jouw-gebruikersnaam>.github.io/<repo-naam>/`
+
+Eenmalig controleren in GitHub repository settings:
+- `Settings` -> `Pages`
+- `Source`: `GitHub Actions`
+
+## Webapp lokaal starten (fallback)
 
 ```bash
 # Ga terug naar de project root

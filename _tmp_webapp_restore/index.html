@@ -45,7 +45,7 @@
           <button type="submit">Account aanmaken</button>
         </form>
 
-        <p id="loginHint" class="login-hint">Lokale modus is beschikbaar zonder Netlify. Log in of ga verder in offline modus.</p>
+        <p id="loginHint" class="login-hint">Gebruik Neon + Netlify Functions. Registreer en log direct in.</p>
       </div>
     </section>
 
@@ -177,17 +177,6 @@
             <label class="switch-row">Toon debug info
               <input id="debugInfoToggle" type="checkbox" />
             </label>
-            <div class="pi-connection-card">
-              <div class="pi-connection-head">
-                <strong>Raspberry Pi</strong>
-                <span id="piConnectionStatus" class="pi-status">Niet verbonden</span>
-              </div>
-              <p>Verbind met de Pi via BLE om live detecties te ontvangen.</p>
-              <div class="pi-connection-actions">
-                <button id="connectPiBtn" type="button">Verbind Pi</button>
-                <button id="disconnectPiBtn" type="button" disabled>Verbreek</button>
-              </div>
-            </div>
             <button id="testCameraAlertBtn" type="button">🧪 Test flitser-alert</button>
           </div>
         </div>
@@ -237,7 +226,6 @@
 
     <script src="status.js"></script>
     <script src="config.js"></script>
-    <script src="js/ble-manager.js"></script>
     <script
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
