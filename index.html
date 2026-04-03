@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Flitser Alert" />
+    <meta name="theme-color" content="#111c31" />
+    <title>Flitser Alert Pro</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+  </head>
+  <body>
+    <section id="loginScreen" class="login-screen">
+      <div class="login-card">
+        <h1>📷 Flitser Alert Pro</h1>
+        <p>Alleen geregistreerde en e-mail geverifieerde accounts hebben toegang.</p>
+        <div class="auth-tabs">
+          <button id="showLoginTab" class="auth-tab active" type="button">Inloggen</button>
+          <button id="showRegisterTab" class="auth-tab" type="button">Registreren</button>
+        </div>
+
+        <form id="loginForm" class="login-form">
+          <input id="loginEmail" type="email" placeholder="E-mail" required />
+          <input id="loginPassword" type="password" placeholder="Wachtwoord" required />
+          <label class="remember-row"><input id="rememberMe" type="checkbox" checked /> Ingelogd blijven</label>
+          <button type="submit">Inloggen</button>
+        </form>
+
+        <form id="registerForm" class="login-form hidden">
+          <input id="registerName" type="text" placeholder="Naam" required />
+          <input id="registerEmail" type="email" placeholder="E-mail" required />
+          <input id="registerPassword" type="password" placeholder="Wachtwoord (min. 8)" minlength="8" required />
+          <label class="field-label">Geboorte datum
+            <input id="registerBirthDate" type="date" required />
+          </label>
+          <button type="submit">Account aanmaken</button>
+        </form>
+
+        <p id="loginHint" class="login-hint">Lokale modus is beschikbaar zonder Netlify. Log in of ga verder in offline modus.</p>
+      </div>
+    </section>
+
+    <main id="appShell" class="app-shell hidden">
+      <div id="map"></div>
+
+      <header class="top-hud">
+        <div class="brand-chip">📷 Flitser Alert Pro</div>
+        <div class="hud-actions">
+          <button id="notifBtn" class="icon-btn" title="Notificaties">🔔</button>
+          <button id="soundBtn" class="icon-btn" title="Geluid">🔊</button>
+        </div>
+      </header>
+
+      <div id="compassWidget" class="compass-widget glass" title="Kompas">
+        <span class="compass-letter north">N</span>
+        <span class="compass-letter east">O</span>
+        <span class="compass-letter south">Z</span>
+        <span class="compass-letter west">W</span>
+        <div id="compassNeedle" class="compass-needle">▲</div>
+      </div>
+
+      <div class="left-hud">
+        <div class="speed-card glass">
+          <div class="speed-label">Snelheid</div>
+          <div id="speedValue" class="speed-value">0 km/h</div>
+          <div id="accelValue" class="speed-sub">0-100: --</div>
+        </div>
+
+        <div class="status-card glass">
+          <div id="publicDataSummary">Flitsers worden geladen...</div>
+          <div id="cameraAlertStatus">Flitser-alert actief op 450m.</div>
+          <div id="mapInfo">Locatie laden…</div>
+        </div>
+      </div>
+
+      <section id="reportsPanel" class="reports-panel glass minimized">
+        <div class="reports-header">
+          <span>📢 Meldingen</span>
+          <button id="clearReports" class="clear-btn">Wis</button>
+        </div>
+        <div id="reportsList" class="reports-list">
+          <div class="report-item report-empty">Nog geen meldingen</div>
+        </div>
+      </section>
+
+      <section id="alertLog" class="alert-log glass minimized">
+        <div class="log-header">
+          <span>📋 Activiteiten</span>
+          <button id="clearLog" class="clear-btn">Leegmaken</button>
+        </div>
+        <div id="logEntries" class="log-entries">
+          <div class="log-entry log-info">Systeem gestart</div>
+        </div>
+      </section>
+
+      <div class="fab-stack">
+        <div id="actionMenu" class="action-menu hidden">
+          <button id="quickReportBtn" class="menu-btn">⚠️ Melding maken</button>
+          <button id="openSettingsBtn" class="menu-btn">⚙️ Instellingen</button>
+          <button id="openProfileBtn" class="menu-btn">👤 Profiel</button>
+          <button id="toggleLogBtn" class="menu-btn">📋 Activiteiten</button>
+          <button id="toggleReportsBtn" class="menu-btn">📢 Meldingen</button>
+          <button id="logoutBtn" class="menu-btn danger">🚪 Uitloggen</button>
+        </div>
+        <button id="actionFab" class="fab" title="Menu">＋</button>
+      </div>
+
+      <button id="followMapBtn" class="follow-btn glass" title="Kaart centreren">🎯 Centreren</button>
+
+      <button id="reportBtn" class="fab hidden" title="Plaats melding">⚠️</button>
+
+      <div id="reportModal" class="modal">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2>📍 Melding doorgeven</h2>
+            <button id="closeModal" class="close-btn">✕</button>
+          </div>
+          <div class="modal-body">
+            <p class="modal-hint">Uw melding wordt gedeeld op uw huidige locatie</p>
+            <div class="report-grid">
+              <button class="report-option" data-type="flitser-50">📷<br><span>Flitser 50</span></button>
+              <button class="report-option" data-type="flitser-80">📷<br><span>Flitser 80</span></button>
+              <button class="report-option" data-type="controle">👮<br><span>Controle</span></button>
+              <button class="report-option" data-type="hulpdienst">🚨<br><span>Hulpdienst</span></button>
+              <button class="report-option" data-type="ongeluk">💥<br><span>Ongeluk</span></button>
+              <button class="report-option" data-type="file">🚗<br><span>File</span></button>
+              <button class="report-option" data-type="object">⚠️<br><span>Object</span></button>
+              <button class="report-option" data-type="anders">❓<br><span>Overig</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="settingsPanel" class="modal">
+        <div class="modal-content settings-content">
+          <div class="modal-header">
+            <h2>⚙️ Instellingen</h2>
+            <button class="close-btn" data-close-panel="settingsPanel">✕</button>
+          </div>
+          <div class="modal-body settings-grid">
+            <label>Flitser-alert afstand
+              <select id="cameraAlertDistanceSelect">
+                <option value="300">300 m</option>
+                <option value="450">450 m</option>
+                <option value="600">600 m</option>
+                <option value="800">800 m</option>
+              </select>
+            </label>
+            <label>Stem
+              <select id="voiceSelect">
+                <option value="auto">Automatisch (NL)</option>
+              </select>
+            </label>
+            <label>Kaartmodus
+              <select id="mapThemeSelect">
+                <option value="auto">Automatisch</option>
+                <option value="day">Dag</option>
+                <option value="night">Nacht</option>
+              </select>
+            </label>
+            <label class="switch-row">Kaart automatisch volgen
+              <input id="autoCenterToggle" type="checkbox" checked />
+            </label>
+            <label class="switch-row">Spraakmeldingen
+              <input id="voiceToggle" type="checkbox" checked />
+            </label>
+            <label class="switch-row">Technische details tonen
+              <input id="debugInfoToggle" type="checkbox" />
+            </label>
+            <div class="pi-connection-card">
+              <div class="pi-connection-head">
+                <strong>Raspberry Pi</strong>
+                <span id="piConnectionStatus" class="pi-status">Verbinding niet actief</span>
+              </div>
+              <p>Verbind met de Pi via BLE om live detecties te ontvangen.</p>
+              <div class="pi-connection-actions">
+                <button id="connectPiBtn" type="button">Verbind met Raspberry Pi</button>
+                <button id="disconnectPiBtn" type="button" disabled>Verbinding verbreken</button>
+              </div>
+            </div>
+            <button id="testCameraAlertBtn" type="button">🧪 Voorbeeldwaarschuwing</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="profilePanel" class="modal">
+        <div class="modal-content settings-content">
+          <div class="modal-header">
+            <h2>👤 Profiel</h2>
+            <button class="close-btn" data-close-panel="profilePanel">✕</button>
+          </div>
+          <div class="modal-body settings-grid">
+            <label>Naam
+              <input id="profileName" type="text" placeholder="Jouw naam" />
+            </label>
+            <label>Voertuig
+              <input id="profileVehicle" type="text" placeholder="Bijv. Golf GTI" />
+            </label>
+            <div id="lastZeroToHundred" class="profile-stat">Laatste 0-100: --</div>
+            <button id="saveProfileBtn" type="button">💾 Profiel opslaan</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="legacyControls" class="hidden">
+        <button id="refreshBtn" type="button">refresh</button>
+        <button id="demoLocBtn" type="button">demo</button>
+        <button id="togglePublicCamsBtn" type="button">toggle cams</button>
+        <button id="applyBtn" type="button">apply</button>
+        <select id="manualLevel">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+        </select>
+        <div id="statusCircle"></div>
+        <span id="statusText"></span>
+        <span id="levelValue"></span>
+        <span id="radiusValue"></span>
+        <span id="distanceValue"></span>
+        <div id="alertStrip" class="hidden"></div>
+        <div id="distanceMonitor" class="hidden">
+          <span id="monitorDistance"></span>
+          <span id="monitorStatus"></span>
+        </div>
+      </div>
+    </main>
+
+    <script src="status.js"></script>
+    <script src="config.js"></script>
+    <script src="js/ble-manager.js"></script>
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="app.js"></script>
+  </body>
+</html>
