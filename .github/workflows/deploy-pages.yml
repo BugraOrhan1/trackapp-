@@ -11,6 +11,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -21,14 +24,29 @@ jobs:
 
       - name: Prepare static site artifact
         run: |
-          mkdir -p _site
-          cp -R webapp/. _site/
-          touch _site/.nojekyll
+          SITE_DIR="$RUNNER_TEMP/site"
+          mkdir -p "$SITE_DIR"
+          cp -R webapp/. "$SITE_DIR/"
+          touch "$SITE_DIR/.nojekyll"
 
       - name: Deploy to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: _site
-          publish_branch: gh-pages
-          force_orphan: true
+        run: |
+          SITE_DIR="$RUNNER_TEMP/site"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git switch --orphan gh-pages
+          git rm -rf . >/dev/null 2>&1 || true
+
+          cp -R "$SITE_DIR/." .
+
+          git add --all
+
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+
+          git commit -m "Deploy webapp to GitHub Pages"
+          git push --force origin gh-pages
