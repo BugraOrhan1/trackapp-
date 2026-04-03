@@ -33,4 +33,4 @@ sudo ./start_ble.sh
 ## Notes
 - `dbus` en `gi` komen uit apt packages op de Pi.
 - Editor waarschuwingen op Windows over deze imports kun je negeren.
-- Voor audio alerts in webapp: voeg `sounds/alert.mp3` toe.
+- Voor audio alerts in webapp: voeg `webapp/sounds/alert.mp3` toe.

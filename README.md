@@ -2,6 +2,15 @@
 
 TrackApp is een Target Blue Eye style project: een Raspberry Pi Zero 2 W met RTL2832U scant 380-400 MHz, stuurt detecties als JSON via BLE naar de telefoon, en de webapp toont die live op een kaart met cirkels en alerts.
 
+## Structuur
+
+De repository is nu opgeschoond naar vier hoofdonderdelen:
+
+- `raspberry-pi/` - scanner en BLE server
+- `webapp/` - browser UI, kaart en BLE client
+- `ios-app/` - iOS BLE app
+- `gui/` - desktop test GUI
+
 ## Eerst runnen
 
 ```bash
@@ -24,6 +33,9 @@ sudo ./start_ble.sh
 ```bash
 # Ga terug naar de project root
 cd ..
+
+# Start de webapp in de browser
+cd webapp
 
 # Start een lokale webserver voor Web Bluetooth
 python3 -m http.server 8000
@@ -62,11 +74,11 @@ Daarmee zie je direct:
 
 - [raspberry-pi/target_blue_eye_scanner.py](raspberry-pi/target_blue_eye_scanner.py)
 - [raspberry-pi/ble_server.py](raspberry-pi/ble_server.py)
-- [js/ble-manager.js](js/ble-manager.js)
-- [js/emergency-display.js](js/emergency-display.js)
-- [js/app.js](js/app.js)
-- [index.html](index.html)
-- [css/style.css](css/style.css)
+- [webapp/js/ble-manager.js](webapp/js/ble-manager.js)
+- [webapp/js/emergency-display.js](webapp/js/emergency-display.js)
+- [webapp/js/app.js](webapp/js/app.js)
+- [webapp/index.html](webapp/index.html)
+- [webapp/css/style.css](webapp/css/style.css)
 
 ## BLE UUIDs
 
