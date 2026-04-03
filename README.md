@@ -30,7 +30,7 @@ sudo ./start_ble.sh
 
 ## Webapp op GitHub Pages (aanrader)
 
-De webapp wordt nu automatisch gedeployed naar GitHub Pages via GitHub Actions.
+De webapp wordt nu automatisch gedeployed naar GitHub Pages via GitHub Actions naar de `gh-pages` branch.
 
 1. Push je wijzigingen naar `main`.
 2. Ga in GitHub naar `Actions` en wacht op workflow `Deploy Webapp to GitHub Pages`.
@@ -39,7 +39,8 @@ De webapp wordt nu automatisch gedeployed naar GitHub Pages via GitHub Actions.
 
 Eenmalig controleren in GitHub repository settings:
 - `Settings` -> `Pages`
-- `Source`: `GitHub Actions`
+- `Source`: `Deploy from a branch`
+- `Branch`: `gh-pages` en folder `/ (root)`
 
 ## Webapp lokaal starten (fallback)
 
