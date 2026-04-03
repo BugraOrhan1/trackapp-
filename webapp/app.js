@@ -379,8 +379,7 @@ function updateFollowButtonVisibility() {
     return;
   }
 
-  const shouldShow = Boolean(settings.autoCenter && manualFollowPaused);
-  followButton.classList.toggle("hidden", !shouldShow);
+  followButton.classList.remove("hidden");
 }
 
 function updateCompassWidget() {
@@ -2116,7 +2115,7 @@ on("followMapBtn", "click", () => {
   saveSettings();
   updateUISettings();
   map.panTo([latestUserLocation.lat, latestUserLocation.lng], { animate: true, duration: 0.35 });
-  addLogEntry("Kaart volgt uw locatie opnieuw", "success");
+  addLogEntry("Kaart gecentreerd op uw locatie", "success");
 });
 
 on("debugInfoToggle", "change", (event) => {
