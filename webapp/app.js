@@ -2285,38 +2285,6 @@ document.querySelectorAll("#settingsPanel, #profilePanel").forEach((panel) => {
 // INITIALIZATION
 // ============================================
 
-switchAuthTab("login");
-
-(async () => {
-  if (isLocalMode()) {
-    initializeLocalSession();
-    showApp();
-    startAppIfNeeded();
-    setLoginHint("Lokale modus actief. Pi BLE kan vanuit Instellingen worden verbonden.", "success");
-    return;
-  }
-
-  if (!hasAuthConfig()) {
-    showLogin();
-    setLoginHint("Vul apiBaseUrl in config.js in (/.netlify/functions).", "error");
-    return;
-  }
-
-  const existingSession = getSession();
-  if (!existingSession) {
-    showLogin();
-    return;
-  }
-
-  const validSession = await validateExistingSession(existingSession);
-  if (!validSession) {
-    clearSession();
-    showLogin();
-    setLoginHint("Sessie verlopen. Log opnieuw in.", "error");
-    return;
-  }
-
-  setSession(validSession, true);
-  showApp();
-  startAppIfNeeded();
-})();
+initializeLocalSession();
+showApp();
+startAppIfNeeded();
