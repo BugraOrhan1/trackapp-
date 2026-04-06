@@ -298,7 +298,8 @@ function ensurePiBleManager() {
     addLogEntry(`Pi melding: ${serviceLabel} op ${distanceText}`, "info");
   };
   piBleManager.onError = (error) => {
-    updatePiConnectionUI(false, "Verbinding mislukt");
+    const message = error?.message || String(error || "Verbinding mislukt");
+    updatePiConnectionUI(false, message === "Web Bluetooth wordt niet ondersteund in deze browser." ? "iPhone/Safari ondersteunt Web Bluetooth niet" : "Verbinding mislukt");
     addLogEntry(`Pi BLE fout: ${error.message || error}`, "warning");
   };
 
@@ -308,6 +309,13 @@ function ensurePiBleManager() {
 async function connectPiBle() {
   const manager = ensurePiBleManager();
   if (!manager) {
+    return;
+  }
+
+  if (!navigator.bluetooth) {
+    const message = "iPhone/Safari ondersteunt Web Bluetooth niet. Gebruik Chrome/Edge op Android of desktop, of de iOS-app.";
+    updatePiConnectionUI(false, message);
+    addLogEntry(message, "warning");
     return;
   }
 
