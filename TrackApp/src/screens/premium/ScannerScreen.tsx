@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import type { Device } from 'react-native-ble-plx';
 
 import { useBLE } from '../../hooks/useBLE';
 import { useSubscription } from '../../hooks/useSubscription';
@@ -102,11 +103,11 @@ export default function ScannerScreen() {
       {!isConnected && foundDevices.length > 0 ? (
         <View style={styles.devicesCard}>
           <Text style={styles.sectionTitle}>Gevonden apparaten</Text>
-          {foundDevices.map((device: { id: string; name?: string }) => (
+          {foundDevices.map((device: Device) => (
             <TouchableOpacity key={device.id} style={styles.deviceItem} onPress={() => handleConnect(device.id)}>
               <Ionicons name="hardware-chip" size={24} color={COLORS.primary} />
               <View style={styles.deviceInfo}>
-                <Text style={styles.deviceName}>{device.name || 'Onbekend'}</Text>
+                <Text style={styles.deviceName}>{device.name ?? 'Onbekend'}</Text>
                 <Text style={styles.deviceId}>{device.id}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={COLORS.gray500} />

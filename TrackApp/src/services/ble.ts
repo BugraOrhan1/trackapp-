@@ -1,4 +1,5 @@
 import { BleManager, Device, Characteristic } from 'react-native-ble-plx';
+import { encode as btoa, decode as atob } from 'base-64';
 import { BLE_CONFIG } from '../config/constants';
 import type { Detection, EmergencyServiceType } from '../types';
 
@@ -113,7 +114,7 @@ class BLEService {
     const characteristic = await this.detectionsCharacteristic.read();
     if (!characteristic.value) return [];
 
-    const jsonStr = decodeBase64(characteristic.value);
+    const jsonStr = atob(characteristic.value);
     const detections = JSON.parse(jsonStr);
 
     return Array.isArray(detections) ? detections : [];
@@ -135,7 +136,7 @@ class BLEService {
 
       if (characteristic?.value) {
         try {
-          const jsonStr = decodeBase64(characteristic.value);
+          const jsonStr = atob(characteristic.value);
           const detections = JSON.parse(jsonStr);
           callback(Array.isArray(detections) ? detections : []);
         } catch (err) {
@@ -154,7 +155,7 @@ class BLEService {
     }
 
     const command = JSON.stringify({ action });
-    const base64 = encodeBase64(command);
+    const base64 = btoa(command);
 
     await this.commandCharacteristic.writeWithResponse(base64);
   }
@@ -184,17 +185,9 @@ class BLEService {
     const characteristic = await this.statusCharacteristic.read();
     if (!characteristic.value) return null;
 
-    const jsonStr = decodeBase64(characteristic.value);
+    const jsonStr = atob(characteristic.value);
     return JSON.parse(jsonStr);
   }
-}
-
-function encodeBase64(value: string): string {
-  return globalThis.btoa(unescape(encodeURIComponent(value)));
-}
-
-function decodeBase64(value: string): string {
-  return decodeURIComponent(escape(globalThis.atob(value)));
 }
 
 export const bleService = new BLEService();

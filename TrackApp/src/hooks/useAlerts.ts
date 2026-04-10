@@ -13,19 +13,11 @@ import type {
   Alert,
 } from '../types';
 
-declare const require: (path: string) => unknown;
-
-const alertSounds = {
-  'alert-camera.mp3': '../../assets/sounds/alert-camera.mp3',
-  'alert-police.mp3': '../../assets/sounds/alert-police.mp3',
-  'alert-emergency.mp3': '../../assets/sounds/alert-emergency.mp3',
-} as const;
-
-const soundAssets = {
+const ALERT_SOUNDS: Record<string, number> = {
   'alert-camera.mp3': require('../../assets/sounds/alert-camera.mp3'),
   'alert-police.mp3': require('../../assets/sounds/alert-police.mp3'),
   'alert-emergency.mp3': require('../../assets/sounds/alert-emergency.mp3'),
-} as const;
+};
 
 export function useAlerts(
   userLocation?: UserLocation | null,
@@ -178,11 +170,9 @@ export function useAlerts(
   }
 
   async function triggerAlert(alert: Alert) {
-    if (alert.sound) {
+    if (alert.sound && ALERT_SOUNDS[alert.sound]) {
       try {
-        const { sound } = await Audio.Sound.createAsync(
-          soundAssets[alert.sound as keyof typeof soundAssets]
-        );
+        const { sound } = await Audio.Sound.createAsync(ALERT_SOUNDS[alert.sound]);
         await sound.playAsync();
       } catch (err) {
         console.error('Audio fout:', err);

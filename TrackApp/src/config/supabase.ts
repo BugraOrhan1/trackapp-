@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ENV } from './env';
 
+// TODO: Vervang met echte Supabase keys via EXPO_PUBLIC_SUPABASE_URL en EXPO_PUBLIC_SUPABASE_ANON_KEY.
+
 const SUPABASE_URL = ENV.SUPABASE_URL;
 const SUPABASE_ANON_KEY = ENV.SUPABASE_ANON_KEY;
 

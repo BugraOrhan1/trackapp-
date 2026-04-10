@@ -4,12 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Alert } from '../../types';
 import { COLORS } from '../../config/constants';
 
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
 type Props = {
   alert: Alert;
   onDismiss: () => void;
 };
 
-const iconByType: Record<Alert['type'], string> = {
+const iconByType: Record<Alert['type'], IoniconName> = {
   speed_camera: 'camera',
   police: 'shield-checkmark',
   accident: 'warning',

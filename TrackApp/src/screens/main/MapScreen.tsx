@@ -102,7 +102,7 @@ export default function MapScreen() {
         {reports.map((report: (typeof reports)[number]) => <ReportMarker key={report.id} report={report} onPress={() => setBottomSheetVisible(true)} />)}
         {isPremium ? detections.map((detection: (typeof detections)[number]) => (
           <React.Fragment key={detection.id}>
-            <EmergencyMarker detection={detection} onPress={() => setBottomSheetVisible(true)} />
+            <EmergencyMarker detection={detection} userLocation={location} onPress={() => setBottomSheetVisible(true)} />
             <ProximityCircle center={{ latitude: location?.latitude || 0, longitude: location?.longitude || 0 }} radiusMeters={detection.distanceKm * 1000} serviceType={detection.serviceType} />
           </React.Fragment>
         )) : null}

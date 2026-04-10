@@ -14,7 +14,7 @@ import os
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import numpy as np
 
@@ -67,7 +67,7 @@ def classify_peak(power_db: float) -> str:
     return "unknown"
 
 
-def scan_frequency(sdr: RtlSdr, frequency_hz: float) -> float:
+def scan_frequency(sdr: Any, frequency_hz: float) -> float:
     sdr.center_freq = frequency_hz
     samples = sdr.read_samples(256_000)
     spectrum = np.fft.fftshift(np.fft.fft(samples))

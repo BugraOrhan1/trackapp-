@@ -120,3 +120,19 @@ export const authService = {
 		return true;
 	},
 };
+
+export async function login(email: string, password: string) {
+	return authService.login(email, password);
+}
+
+export async function register(email: string, password: string, username?: string) {
+	return authService.register(email, password, username);
+}
+
+export async function logout() {
+	return authService.logout();
+}
+
+export async function forgotPassword(email: string) {
+	return authService.resetPassword(email);
+}

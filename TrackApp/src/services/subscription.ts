@@ -7,6 +7,8 @@ import { Platform } from 'react-native';
 import { supabase } from '../config/supabase';
 import { getRevenueCatApiKey } from '../config/revenueCat';
 
+// TODO: Vervang met echte RevenueCat keys via EXPO_PUBLIC_REVENUECAT_API_KEY_IOS en EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID.
+
 export const subscriptionService = {
   /**
    * Initialiseer RevenueCat

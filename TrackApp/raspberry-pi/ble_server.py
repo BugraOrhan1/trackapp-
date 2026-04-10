@@ -13,10 +13,10 @@ import signal
 from pathlib import Path
 from typing import Any
 
-from gi.repository import GLib
-from dbus.mainloop.glib import DBusGMainLoop
-from pydbus import SystemBus
-from pydbus.generic import signal as dbus_signal
+from gi.repository import GLib  # type: ignore[import-not-found]
+from dbus.mainloop.glib import DBusGMainLoop  # type: ignore[import-not-found]
+from pydbus import SystemBus  # type: ignore[import-not-found]
+from pydbus.generic import signal as dbus_signal  # type: ignore[import-not-found]
 
 BASE_DIR = Path(__file__).resolve().parent
 DETECTIONS_FILE = BASE_DIR / "detections.json"
