@@ -12,7 +12,7 @@ on:
 jobs:
   build-ios:
     runs-on: ubuntu-latest
-    environment: production
+    environment: TrackApp
     defaults:
       run:
         working-directory: TrackApp
