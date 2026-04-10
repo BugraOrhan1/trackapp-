@@ -5,18 +5,14 @@ import Purchases, {
 } from 'react-native-purchases';
 import { Platform } from 'react-native';
 import { supabase } from '../config/supabase';
-
-const REVENUECAT_API_KEY_IOS = 'appl_YOUR_IOS_KEY';
-const REVENUECAT_API_KEY_ANDROID = 'goog_YOUR_ANDROID_KEY';
+import { getRevenueCatApiKey } from '../config/revenueCat';
 
 export const subscriptionService = {
   /**
    * Initialiseer RevenueCat
    */
   async initialize(userId: string) {
-    const apiKey = Platform.OS === 'ios' 
-      ? REVENUECAT_API_KEY_IOS 
-      : REVENUECAT_API_KEY_ANDROID;
+    const apiKey = getRevenueCatApiKey(Platform.OS === 'ios' ? 'ios' : 'android');
 
     await Purchases.configure({ apiKey, appUserID: userId });
   },
