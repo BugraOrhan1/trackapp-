@@ -7,6 +7,10 @@ module.exports = {
     ...baseConfig,
     extra: {
       ...(baseConfig.extra ?? {}),
+      eas: {
+        ...(baseConfig.extra?.eas ?? {}),
+        projectId: '57609f9f-c2ef-4307-99c5-e206d3e6dc84',
+      },
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
       googleMapsApiKeyIos: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS ?? '',
