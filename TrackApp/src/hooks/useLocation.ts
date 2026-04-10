@@ -1,55 +1,84 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import * as Location from 'expo-location';
-import type { Location as AppLocation } from '../types';
+import { locationService } from '../services/location';
+import type { UserLocation } from '../types';
 
 export function useLocation() {
-  const [location, setLocation] = useState<AppLocation | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [location, setLocation] = useState<UserLocation | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [permissionGranted, setPermissionGranted] = useState(false);
+  const [subscription, setSubscription] = useState<Location.LocationSubscription | null>(null);
 
   useEffect(() => {
-    let subscription: Location.LocationSubscription | null = null;
-
-    async function start() {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setError('Location permission denied');
-          setLoading(false);
-          return;
-        }
-
-        const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        setLocation({
-          latitude: current.coords.latitude,
-          longitude: current.coords.longitude,
-          heading: current.coords.heading ?? undefined,
-          speed: current.coords.speed ?? undefined,
-          accuracy: current.coords.accuracy ?? undefined,
-        });
-
-        subscription = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 5 }, (next) => {
-          setLocation({
-            latitude: next.coords.latitude,
-            longitude: next.coords.longitude,
-            heading: next.coords.heading ?? undefined,
-            speed: next.coords.speed ?? undefined,
-            accuracy: next.coords.accuracy ?? undefined,
-          });
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Location error');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    start();
-
+    requestPermissions();
     return () => {
-      subscription?.remove();
+      stopWatching();
     };
   }, []);
 
-  return { location, error, loading };
+  async function requestPermissions() {
+    try {
+      const granted = await locationService.requestPermissions();
+      setPermissionGranted(granted);
+      
+      if (granted) {
+        await getCurrentLocation();
+      } else {
+        setError('Locatie permissie niet gegeven');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Permissie fout');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function getCurrentLocation() {
+    try {
+      setLoading(true);
+      const loc = await locationService.getCurrentLocation();
+      setLocation(loc);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Locatie fout');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const startWatching = useCallback(async () => {
+    if (!permissionGranted) {
+      setError('Geen locatie permissie');
+      return;
+    }
+
+    try {
+      const sub = await locationService.watchLocation((loc) => {
+        setLocation(loc);
+      });
+      setSubscription(sub);
+    } catch (err: any) {
+      setError(err.message || 'Watch fout');
+    }
+  }, [permissionGranted]);
+
+  async function stopWatching() {
+    if (subscription) {
+      await locationService.stopWatching(subscription);
+      setSubscription(null);
+    }
+  }
+
+  return {
+    location,
+    loading,
+    error,
+    permissionGranted,
+    isWatching: subscription !== null,
+    getCurrentLocation,
+    startWatching,
+    stopWatching,
+    requestPermissions,
+  };
 }

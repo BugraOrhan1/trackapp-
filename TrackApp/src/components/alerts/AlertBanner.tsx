@@ -1,15 +1,26 @@
 import React from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../config/theme';
+import type { Alert } from '../../types';
 
-type Props = { title: string; distance?: string; color?: string; onDismiss?: () => void };
+type Props = {
+  alert?: Alert;
+  title?: string;
+  distance?: string;
+  color?: string;
+  onDismiss?: () => void;
+};
 
-export default function AlertBanner({ title, distance, color = theme.colors.danger, onDismiss }: Props): JSX.Element {
+export default function AlertBanner({ alert, title, distance, color = theme.colors.danger, onDismiss }: Props): JSX.Element {
+  const resolvedTitle = alert?.title ?? title ?? '';
+  const resolvedDistance = alert ? `${alert.distance} m` : distance;
+  const resolvedColor = alert?.color ?? color;
+
   return (
-    <Animated.View style={[styles.container, { borderColor: color }]}>
+    <Animated.View style={[styles.container, { borderColor: resolvedColor }]}>
       <Pressable onPress={onDismiss}>
-        <Text style={styles.title}>{title}</Text>
-        {distance ? <Text style={styles.distance}>{distance}</Text> : null}
+        <Text style={styles.title}>{resolvedTitle}</Text>
+        {resolvedDistance ? <Text style={styles.distance}>{resolvedDistance}</Text> : null}
       </Pressable>
     </Animated.View>
   );

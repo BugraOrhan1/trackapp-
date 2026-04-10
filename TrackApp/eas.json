@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 7.0.0"
+    "version": ">= 5.0.0"
   },
   "build": {
     "development": {
@@ -8,9 +8,19 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
     },
-    "production": {}
+    "production": {
+      "ios": {
+        "bundleIdentifier": "com.bugraorhan.trackapp"
+      },
+      "android": {
+        "package": "com.bugraorhan.trackapp"
+      }
+    }
   },
   "submit": {
     "production": {}

@@ -1,34 +1,45 @@
-import { useEffect, useState } from 'react';
-import type { Location, SpeedCamera } from '../types';
-import { fetchSpeedCameras } from '../services/supabase';
-import { haversineDistanceKm } from '../utils/distance';
+import { useState, useEffect } from 'react';
+import { speedCamerasService } from '../services/speedCameras';
+import type { SpeedCamera, UserLocation } from '../types';
 
-export function useSpeedCameras(center: Location | null, radiusKm = 10) {
-  const [items, setItems] = useState<SpeedCamera[]>([]);
+export function useSpeedCameras(
+  userLocation: UserLocation | null,
+  radiusKm: number = 10
+) {
+  const [cameras, setCameras] = useState<SpeedCamera[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-
-    async function load() {
-      const cameras = await fetchSpeedCameras();
-      const filtered = center
-        ? cameras.filter((camera) => haversineDistanceKm(center.latitude, center.longitude, camera.latitude, camera.longitude) <= radiusKm)
-        : cameras;
-      if (mounted) {
-        setItems(filtered);
-        setLoading(false);
-      }
+    if (userLocation) {
+      fetchCameras();
     }
+  }, [userLocation?.latitude, userLocation?.longitude, radiusKm]);
 
-    load();
-    const interval = setInterval(load, 30000);
+  async function fetchCameras() {
+    if (!userLocation) return;
 
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [center?.latitude, center?.longitude, radiusKm]);
+    try {
+      setLoading(true);
+      const data = await speedCamerasService.getSpeedCamerasNearby(
+        userLocation.latitude,
+        userLocation.longitude,
+        radiusKm
+      );
+      setCameras(data);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Fout bij laden flitsers');
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  return { speedCameras: items, loading };
+  return {
+    cameras,
+    speedCameras: cameras,
+    loading,
+    error,
+    refresh: fetchCameras,
+  };
 }

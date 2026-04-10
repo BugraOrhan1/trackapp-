@@ -1,35 +1,123 @@
-import { useEffect, useState } from 'react';
-import type { Report, Location } from '../types';
-import { fetchReportsWithinRadius, subscribeToReports } from '../services/supabase';
+import { useState, useEffect, useCallback } from 'react';
+import { reportsService } from '../services/reports';
+import type { Report, ReportType, UserLocation } from '../types';
 
-export function useReports(center: Location | null, radiusKm = 10) {
+export function useReports(userLocation: UserLocation | null, radiusKm: number = 10) {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
+    if (userLocation) {
+      fetchReports();
+      
+      // Subscribe to realtime updates
+      const unsubscribe = reportsService.subscribeToReports(
+        userLocation.latitude,
+        userLocation.longitude,
+        radiusKm,
+        (newReport: Report) => {
+          setReports((prev: Report[]) => [newReport, ...prev]);
+        }
+      );
 
-    async function load() {
-      try {
-        if (!center) return;
-        const items = await fetchReportsWithinRadius(center, radiusKm);
-        if (mounted) setReports(items);
-      } catch (err) {
-        if (mounted) setError(err instanceof Error ? err.message : 'Reports load failed');
-      } finally {
-        if (mounted) setLoading(false);
-      }
+      return () => {
+        unsubscribe();
+      };
+    }
+  }, [userLocation?.latitude, userLocation?.longitude, radiusKm]);
+
+  async function fetchReports() {
+    if (!userLocation) return;
+
+    try {
+      setLoading(true);
+      const data = await reportsService.getReportsNearby(
+        userLocation.latitude,
+        userLocation.longitude,
+        radiusKm
+      );
+      setReports(data);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Fout bij laden meldingen');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function createReport(
+    type: ReportType,
+    description?: string,
+    customLocation?: { latitude: number; longitude: number }
+  ) {
+    const loc = customLocation || userLocation;
+    if (!loc) {
+      throw new Error('Geen locatie beschikbaar');
     }
 
-    load();
-    const channel = subscribeToReports(load);
+    try {
+      const newReport = await reportsService.createReport(
+        type,
+        loc.latitude,
+        loc.longitude,
+        description
+      );
+      
+      // Add to local state
+      setReports((prev: Report[]) => [newReport, ...prev]);
+      
+      return newReport;
+    } catch (err: any) {
+      setError(err.message || 'Fout bij maken melding');
+      throw err;
+    }
+  }
 
-    return () => {
-      mounted = false;
-      void channel.remove();
-    };
-  }, [center?.latitude, center?.longitude, radiusKm]);
+  async function voteReport(reportId: string, voteType: 'up' | 'down') {
+    try {
+      await reportsService.voteReport(reportId, voteType);
+      
+      // Update local state
+      setReports((prev: Report[]) => prev.map((report: Report) => {
+        if (report.id === reportId) {
+          return {
+            ...report,
+            upvotes: voteType === 'up' ? report.upvotes + 1 : report.upvotes,
+            downvotes: voteType === 'down' ? report.downvotes + 1 : report.downvotes,
+          };
+        }
+        return report;
+      }));
+    } catch (err: any) {
+      setError(err.message || 'Fout bij stemmen');
+      throw err;
+    }
+  }
 
-  return { reports, loading, error, refresh: async () => { if (center) setReports(await fetchReportsWithinRadius(center, radiusKm)); } };
+  async function deleteReport(reportId: string) {
+    try {
+      await reportsService.deleteReport(reportId);
+      
+      // Remove from local state
+      setReports((prev: Report[]) => prev.filter((r: Report) => r.id !== reportId));
+    } catch (err: any) {
+      setError(err.message || 'Fout bij verwijderen');
+      throw err;
+    }
+  }
+
+  const refresh = useCallback(() => {
+    fetchReports();
+  }, [userLocation, radiusKm]);
+
+  return {
+    reports,
+    loading,
+    error,
+    createReport,
+    voteReport,
+    deleteReport,
+    refresh,
+  };
 }

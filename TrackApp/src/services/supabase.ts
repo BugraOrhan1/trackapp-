@@ -176,5 +176,6 @@ function mapAuthUserToUser(id: string, email: string, username: string): User {
     subscriptionType: 'free',
     totalReports: 0,
     reputationScore: 0,
+    createdAt: new Date(),
   };
 }

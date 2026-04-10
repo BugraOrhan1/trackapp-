@@ -90,6 +90,15 @@ create policy "Authenticated users can create reports"
 create policy "Users can update own reports"
   on reports for update using (auth.uid() = user_id);
 
+create policy "Users can view report votes"
+  on report_votes for select using (true);
+
+create policy "Users can create own report votes"
+  on report_votes for insert with check (auth.uid() = user_id);
+
+create policy "Users can delete own report votes"
+  on report_votes for delete using (auth.uid() = user_id);
+
 create policy "Speed cameras are viewable by everyone"
   on speed_cameras for select using (true);
 
@@ -111,7 +120,15 @@ create or replace function handle_new_user()
 returns trigger as $$
 begin
   insert into profiles (id, username)
-  values (new.id, new.email);
+  values (new.id, coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1)));
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create or replace function handle_profile_update_timestamp()
+returns trigger as $$
+begin
+  new.updated_at = now();
   return new;
 end;
 $$ language plpgsql security definer;
@@ -120,6 +137,10 @@ $$ language plpgsql security definer;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
+
+create trigger on_profile_update_timestamp
+  before update on profiles
+  for each row execute function handle_profile_update_timestamp();
 
 -- Function to update report votes
 create or replace function update_report_votes()
@@ -148,3 +169,11 @@ create trigger on_vote_change
 
 -- Realtime subscriptions
 alter publication supabase_realtime add table reports;
+
+-- Indexes for the main app flows
+create index reports_lat_lng_idx on reports (latitude, longitude);
+create index reports_active_created_idx on reports (is_active, created_at desc);
+create index report_votes_report_idx on report_votes (report_id);
+create index report_votes_user_idx on report_votes (user_id);
+create index speed_cameras_active_idx on speed_cameras (is_active);
+create index pi_detections_user_created_idx on pi_detections (user_id, created_at desc);

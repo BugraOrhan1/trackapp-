@@ -1,15 +1,29 @@
 import { create } from 'zustand';
-import type { Location, Report, SpeedCamera, Detection } from '../types';
+import type { UserLocation, SpeedCamera, Report, Detection } from '../types';
 
 interface MapState {
-  userLocation: Location | null;
-  mapRegion: Location | null;
+  userLocation: UserLocation | null;
+  followUser: boolean;
+  speedCameras: SpeedCamera[];
+  reports: Report[];
+  detections: Detection[];
+  selectedMarkerId: string | null;
+
+  setUserLocation: (location: UserLocation) => void;
+  setFollowUser: (follow: boolean) => void;
+  setSpeedCameras: (cameras: SpeedCamera[]) => void;
+  setReports: (reports: Report[]) => void;
+  setDetections: (detections: Detection[]) => void;
+  setSelectedMarkerId: (id: string | null) => void;
+
+  clearAll: () => void;
+
+  mapRegion: UserLocation | null;
   nearbySpeedCameras: SpeedCamera[];
   nearbyReports: Report[];
   activeDetections: Detection[];
   activeAlerts: string[];
-  setUserLocation: (location: Location | null) => void;
-  setMapRegion: (region: Location | null) => void;
+  setMapRegion: (region: UserLocation | null) => void;
   setNearbySpeedCameras: (items: SpeedCamera[]) => void;
   setNearbyReports: (items: Report[]) => void;
   setActiveDetections: (items: Detection[]) => void;
@@ -17,18 +31,36 @@ interface MapState {
   clearAlerts: () => void;
 }
 
-export const useMapStore = create<MapState>((set) => ({
+export const useMapStore = create<MapState>((set: any) => ({
   userLocation: null,
+  followUser: true,
+  speedCameras: [],
+  reports: [],
+  detections: [],
+  selectedMarkerId: null,
   mapRegion: null,
   nearbySpeedCameras: [],
   nearbyReports: [],
   activeDetections: [],
   activeAlerts: [],
-  setUserLocation: (location) => set({ userLocation: location }),
-  setMapRegion: (mapRegion) => set({ mapRegion }),
-  setNearbySpeedCameras: (nearbySpeedCameras) => set({ nearbySpeedCameras }),
-  setNearbyReports: (nearbyReports) => set({ nearbyReports }),
-  setActiveDetections: (activeDetections) => set({ activeDetections }),
-  pushAlert: (message) => set((state) => ({ activeAlerts: [message, ...state.activeAlerts].slice(0, 5) })),
+
+  setUserLocation: (location: UserLocation) => set({ userLocation: location }),
+  setFollowUser: (follow: boolean) => set({ followUser: follow }),
+  setSpeedCameras: (cameras: SpeedCamera[]) => set({ speedCameras: cameras, nearbySpeedCameras: cameras }),
+  setReports: (reports: Report[]) => set({ reports, nearbyReports: reports }),
+  setDetections: (detections: Detection[]) => set({ detections, activeDetections: detections }),
+  setSelectedMarkerId: (id: string | null) => set({ selectedMarkerId: id }),
+  clearAll: () => set({
+    speedCameras: [],
+    reports: [],
+    detections: [],
+    selectedMarkerId: null,
+  }),
+
+  setMapRegion: (mapRegion: UserLocation | null) => set({ mapRegion }),
+  setNearbySpeedCameras: (nearbySpeedCameras: SpeedCamera[]) => set({ nearbySpeedCameras, speedCameras: nearbySpeedCameras }),
+  setNearbyReports: (nearbyReports: Report[]) => set({ nearbyReports, reports: nearbyReports }),
+  setActiveDetections: (activeDetections: Detection[]) => set({ activeDetections, detections: activeDetections }),
+  pushAlert: (message: string) => set((state: MapState) => ({ activeAlerts: [message, ...state.activeAlerts].slice(0, 5) })),
   clearAlerts: () => set({ activeAlerts: [] }),
 }));

@@ -1,55 +1,216 @@
-import { useEffect } from 'react';
-import { Alert, Vibration } from 'react-native';
-import { CAMERA_ALERT_THRESHOLD_M, CONTROL_ALERT_THRESHOLD_M } from '../config/constants';
+import { useState, useEffect, useCallback } from 'react';
+import { Audio } from 'expo-av';
+import * as Haptics from 'expo-haptics';
+import { notificationsService } from '../services/notifications';
+import { calculateDistance } from '../utils/distance';
+import { ALERT_THRESHOLDS, COLORS } from '../config/constants';
 import { useMapStore } from '../store/mapStore';
-import type { Report } from '../types';
+import type {
+  UserLocation,
+  SpeedCamera,
+  Report,
+  Detection,
+  Alert,
+} from '../types';
 
-export function useAlerts() {
-  const location = useMapStore((state) => state.userLocation);
-  const reports = useMapStore((state) => state.nearbyReports);
-  const pushAlert = useMapStore((state) => state.pushAlert);
+declare const require: (path: string) => unknown;
+
+const alertSounds = {
+  'alert-camera.mp3': '../../assets/sounds/alert-camera.mp3',
+  'alert-police.mp3': '../../assets/sounds/alert-police.mp3',
+  'alert-emergency.mp3': '../../assets/sounds/alert-emergency.mp3',
+} as const;
+
+const soundAssets = {
+  'alert-camera.mp3': require('../../assets/sounds/alert-camera.mp3'),
+  'alert-police.mp3': require('../../assets/sounds/alert-police.mp3'),
+  'alert-emergency.mp3': require('../../assets/sounds/alert-emergency.mp3'),
+} as const;
+
+export function useAlerts(
+  userLocation?: UserLocation | null,
+  speedCameras?: SpeedCamera[],
+  reports?: Report[],
+  detections?: Detection[]
+) {
+  const storeLocation = useMapStore((state: { userLocation: UserLocation | null }) => state.userLocation);
+  const storeCameras = useMapStore((state: { speedCameras: SpeedCamera[] }) => state.speedCameras);
+  const storeReports = useMapStore((state: { reports: Report[] }) => state.reports);
+  const storeDetections = useMapStore((state: { detections: Detection[] }) => state.detections);
+
+  const location = userLocation ?? storeLocation;
+  const cameraList = speedCameras ?? storeCameras;
+  const reportList = reports ?? storeReports;
+  const detectionList = detections ?? storeDetections;
+  const [activeAlerts, setActiveAlerts] = useState<Alert[]>([]);
+  const [lastAlertIds, setLastAlertIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    if (location) {
+      checkAlerts();
+    }
+  }, [
+    location?.latitude,
+    location?.longitude,
+    cameraList.length,
+    reportList.length,
+    detectionList.length,
+  ]);
+
+  async function checkAlerts() {
     if (!location) return;
 
-    const nearby = reports.find((report) => {
-      const threshold = report.type === 'police_control' ? CONTROL_ALERT_THRESHOLD_M : CAMERA_ALERT_THRESHOLD_M;
-      return distanceMeters(location.latitude, location.longitude, report.latitude, report.longitude) <= threshold;
+    const newAlerts: Alert[] = [];
+
+    cameraList.forEach((camera: SpeedCamera) => {
+      const distance = camera.distance || calculateDistance(
+        location.latitude,
+        location.longitude,
+        camera.latitude,
+        camera.longitude
+      );
+
+      if (distance <= ALERT_THRESHOLDS.SPEED_CAMERA) {
+        const alertId = `camera-${camera.id}`;
+        if (!lastAlertIds.has(alertId)) {
+          newAlerts.push({
+            id: alertId,
+            type: 'speed_camera',
+            title: '📸 Flitser!',
+            message: `${camera.type === 'fixed' ? 'Vaste flitser' : 'Mobiele flitser'} over ${Math.round(distance)}m`,
+            distance: Math.round(distance),
+            color: COLORS.speedCameraFixed,
+            sound: 'alert-camera.mp3',
+          });
+        }
+      }
     });
 
-    if (nearby) {
-      const label = alertLabelForReport(nearby);
-      pushAlert(label);
-      Alert.alert('TrackApp', label);
-      Vibration.vibrate([0, 100, 100, 100]);
+    reportList
+      .filter((r: Report) => r.type === 'police_control')
+      .forEach((report: Report) => {
+        const distance = report.distance || calculateDistance(
+          location.latitude,
+          location.longitude,
+          report.latitude,
+          report.longitude
+        );
+
+        if (distance <= ALERT_THRESHOLDS.POLICE_CONTROL) {
+          const alertId = `report-${report.id}`;
+          if (!lastAlertIds.has(alertId)) {
+            newAlerts.push({
+              id: alertId,
+              type: 'police',
+              title: '🚔 Politiecontrole!',
+              message: `Politiecontrole over ${Math.round(distance)}m`,
+              distance: Math.round(distance),
+              color: COLORS.policeControl,
+              sound: 'alert-police.mp3',
+            });
+          }
+        }
+      });
+
+    reportList
+      .filter((r: Report) => r.type === 'accident')
+      .forEach((report: Report) => {
+        const distance = report.distance || calculateDistance(
+          location.latitude,
+          location.longitude,
+          report.latitude,
+          report.longitude
+        );
+
+        if (distance <= ALERT_THRESHOLDS.ACCIDENT) {
+          const alertId = `accident-${report.id}`;
+          if (!lastAlertIds.has(alertId)) {
+            newAlerts.push({
+              id: alertId,
+              type: 'accident',
+              title: '🚨 Ongeluk!',
+              message: `Ongeluk gemeld ${Math.round(distance / 1000)}km verderop`,
+              distance: Math.round(distance),
+              color: COLORS.accident,
+            });
+          }
+        }
+      });
+
+    detectionList.forEach((detection: Detection) => {
+      const distance = detection.distanceKm * 1000;
+
+      if (distance <= ALERT_THRESHOLDS.EMERGENCY_SERVICE) {
+        const alertId = `emergency-${detection.id}`;
+        if (!lastAlertIds.has(alertId)) {
+          const serviceNames: Record<string, string> = {
+            police: '🚓 Politie',
+            ambulance: '🚑 Ambulance',
+            fire: '🚒 Brandweer',
+            defense: '🎖️ Defensie',
+          };
+
+          newAlerts.push({
+            id: alertId,
+            type: 'emergency',
+            title: `${serviceNames[detection.serviceType] || '🚨 Hulpdienst'}`,
+            message: `${serviceNames[detection.serviceType] || 'Hulpdienst'} gedetecteerd op ${detection.distanceKm.toFixed(1)}km`,
+            distance: Math.round(distance),
+            color: COLORS.premium,
+            sound: 'alert-emergency.mp3',
+          });
+        }
+      }
+    });
+
+    if (newAlerts.length > 0) {
+      setActiveAlerts((prev: Alert[]) => [...prev, ...newAlerts]);
+      const newIds = new Set(lastAlertIds);
+      newAlerts.forEach(alert => newIds.add(alert.id));
+      setLastAlertIds(newIds);
+
+      for (const alert of newAlerts) {
+        await triggerAlert(alert);
+      }
     }
-  }, [location?.latitude, location?.longitude, reports.length]);
-}
 
-function alertLabelForReport(report: Report): string {
-  switch (report.type) {
-    case 'speed_camera_mobile':
-      return 'Mobiele flitser in de buurt';
-    case 'police_control':
-      return 'Politiecontrole in de buurt';
-    case 'accident':
-      return 'Ongeluk in de buurt';
-    case 'traffic_jam':
-      return 'File in de buurt';
-    case 'roadwork':
-      return 'Wegwerkzaamheden in de buurt';
-    case 'danger':
-      return 'Gevaar in de buurt';
-    default:
-      return 'Melding in de buurt';
+    setActiveAlerts((prev: Alert[]) => prev.filter((alert: Alert) => true));
   }
-}
 
-function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const toRad = (value: number) => (value * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  async function triggerAlert(alert: Alert) {
+    if (alert.sound) {
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          soundAssets[alert.sound as keyof typeof soundAssets]
+        );
+        await sound.playAsync();
+      } catch (err) {
+        console.error('Audio fout:', err);
+      }
+    }
+
+    await Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Warning
+    );
+
+    await notificationsService.sendNotification(
+      alert.title,
+      alert.message,
+      { type: alert.type, id: alert.id }
+    );
+  }
+
+  const dismissAlert = useCallback((alertId: string) => {
+    setActiveAlerts((prev: Alert[]) => prev.filter((a: Alert) => a.id !== alertId));
+  }, []);
+
+  const clearAllAlerts = useCallback(() => {
+    setActiveAlerts([]);
+  }, []);
+
+  return {
+    activeAlerts,
+    dismissAlert,
+    clearAllAlerts,
+  };
 }

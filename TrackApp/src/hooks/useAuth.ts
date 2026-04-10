@@ -1,45 +1,129 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { authService } from '../services/auth';
+import type { User } from '../types';
 import { supabase } from '../config/supabase';
-import { useAuthStore } from '../store/authStore';
-import { getCurrentUser } from '../services/supabase';
 
 export function useAuth() {
-  const { user, initializing, setUser, setInitializing } = useAuthStore();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
+    // Check current session
+    checkUser();
 
-    async function bootstrap() {
-      try {
-        const sessionUser = await getCurrentUser();
-        if (mounted) setUser(sessionUser);
-      } finally {
-        if (mounted) setInitializing(false);
+    // Listen to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        if (session?.user) {
+          const userData = await authService.getCurrentUser();
+          setUser(userData);
+        } else {
+          setUser(null);
+        }
       }
-    }
-
-    bootstrap();
-
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ? sessionUserToAppUser(session.user.id, session.user.email ?? '', session.user.user_metadata?.username ?? session.user.email ?? 'user') : null);
-    });
+    );
 
     return () => {
-      mounted = false;
-      data.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
-  }, [setInitializing, setUser]);
+  }, []);
 
-  return { user, initializing };
-}
+  async function checkUser() {
+    try {
+      setLoading(true);
+      const userData = await authService.getCurrentUser();
+      setUser(userData);
+    } catch (err) {
+      console.error('Check user error:', err);
+      setError('Fout bij laden gebruiker');
+    } finally {
+      setLoading(false);
+    }
+  }
 
-function sessionUserToAppUser(id: string, email: string, username: string) {
+  async function login(email: string, password: string) {
+    try {
+      setLoading(true);
+      setError(null);
+      await authService.login(email, password);
+      const userData = await authService.getCurrentUser();
+      setUser(userData);
+    } catch (err: any) {
+      setError(err.message || 'Login mislukt');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function register(email: string, password: string, username?: string) {
+    try {
+      setLoading(true);
+      setError(null);
+      await authService.register(email, password, username);
+    } catch (err: any) {
+      setError(err.message || 'Registratie mislukt');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function logout() {
+    try {
+      setLoading(true);
+      await authService.logout();
+      setUser(null);
+    } catch (err: any) {
+      setError(err.message || 'Logout mislukt');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resetPassword(email: string) {
+    try {
+      setLoading(true);
+      setError(null);
+      await authService.resetPassword(email);
+    } catch (err: any) {
+      setError(err.message || 'Reset mislukt');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function updateProfile(updates: Partial<Pick<User, 'username' | 'avatarUrl'>>) {
+    try {
+      setLoading(true);
+      setError(null);
+      await authService.updateProfile(updates);
+      const userData = await authService.getCurrentUser();
+      setUser(userData);
+    } catch (err: any) {
+      setError(err.message || 'Update mislukt');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function checkIsPremium(): Promise<boolean> {
+    return await authService.isPremium();
+  }
+
   return {
-    id,
-    email,
-    username,
-    subscriptionType: 'free' as const,
-    totalReports: 0,
-    reputationScore: 0,
+    user,
+    loading,
+    error,
+    login,
+    register,
+    logout,
+    resetPassword,
+    updateProfile,
+    checkIsPremium,
   };
 }

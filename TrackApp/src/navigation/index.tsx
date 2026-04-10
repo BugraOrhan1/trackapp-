@@ -1,15 +1,25 @@
 import React from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { createStackNavigator } from '@react-navigation/stack';
+import { useAuthStore } from '../store/authStore';
 import AuthNavigator from './AuthNavigator';
 import MainNavigator from './MainNavigator';
-import Loading from '../components/common/Loading';
 
-export default function RootNavigator(): JSX.Element {
-  const { initializing, user } = useAuth();
+const Stack = createStackNavigator();
 
-  if (initializing) {
-    return <Loading label="TrackApp laden..." />;
+export default function RootNavigator() {
+  const { user, loading } = useAuthStore();
+
+  if (loading) {
+    return null; // TODO: Add loading screen
   }
 
-  return user ? <MainNavigator /> : <AuthNavigator />;
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {user ? (
+        <Stack.Screen name="Main" component={MainNavigator} />
+      ) : (
+        <Stack.Screen name="Auth" component={AuthNavigator} />
+      )}
+    </Stack.Navigator>
+  );
 }
