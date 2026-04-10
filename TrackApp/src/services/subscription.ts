@@ -4,6 +4,7 @@ import Purchases, {
   PurchasesPackage 
 } from 'react-native-purchases';
 import { Platform } from 'react-native';
+import { ENV } from '../config/env';
 import { supabase } from '../config/supabase';
 import { getRevenueCatApiKey } from '../config/revenueCat';
 
@@ -15,8 +16,9 @@ export const subscriptionService = {
    */
   async initialize(userId: string) {
     const apiKey = getRevenueCatApiKey(Platform.OS === 'ios' ? 'ios' : 'android');
+    const appUserID = __DEV__ ? ENV.REVENUECAT_TEST_APP_USER_ID || userId : userId;
 
-    await Purchases.configure({ apiKey, appUserID: userId });
+    await Purchases.configure({ apiKey, appUserID });
   },
 
   /**

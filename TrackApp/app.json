@@ -24,7 +24,7 @@
         "NSBluetoothPeripheralUsageDescription": "TrackApp gebruikt Bluetooth om hulpdiensten te detecteren (Premium feature)."
       },
       "config": {
-        "googleMapsApiKey": "YOUR_IOS_GOOGLE_MAPS_KEY"
+        "googleMapsApiKey": ""
       }
     },
     "android": {
@@ -44,7 +44,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "YOUR_ANDROID_GOOGLE_MAPS_KEY"
+          "apiKey": ""
         }
       }
     },
