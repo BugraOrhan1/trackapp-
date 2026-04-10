@@ -1,19 +1,32 @@
 import React from 'react';
 import { Circle } from 'react-native-maps';
+import type { EmergencyServiceType } from '../../types';
+import { COLORS } from '../../config/constants';
 
 type Props = {
-  latitude?: number;
-  longitude?: number;
-  center?: { latitude: number; longitude: number };
-  radius?: number;
-  radiusMeters?: number;
-  serviceType?: string;
+  center: { latitude: number; longitude: number };
+  radiusMeters: number;
+  serviceType: EmergencyServiceType;
 };
 
-export default function ProximityCircle({ latitude, longitude, center, radius = 1000, radiusMeters, serviceType }: Props): JSX.Element {
-  const resolvedCenter = center ?? { latitude: latitude ?? 0, longitude: longitude ?? 0 };
-  const resolvedRadius = radiusMeters ?? radius;
-  const strokeColor = serviceType === 'police' ? '#2196F3' : serviceType === 'ambulance' ? '#FFD700' : '#FF1744';
+const colors: Record<EmergencyServiceType, string> = {
+  police: COLORS.police,
+  ambulance: COLORS.warning,
+  fire: COLORS.danger,
+  defense: COLORS.success,
+  unknown: COLORS.gray500,
+};
 
-  return <Circle center={resolvedCenter} radius={resolvedRadius} strokeColor={strokeColor} fillColor="rgba(255,23,68,0.08)" />;
+export default function ProximityCircle({ center, radiusMeters, serviceType }: Props): JSX.Element {
+  const color = colors[serviceType];
+
+  return (
+    <Circle
+      center={center}
+      radius={radiusMeters}
+      strokeColor={color}
+      fillColor={`${color}1A`}
+      strokeWidth={2}
+    />
+  );
 }

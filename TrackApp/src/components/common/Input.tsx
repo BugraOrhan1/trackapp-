@@ -1,9 +1,9 @@
 import React from 'react';
-import { StyleSheet, TextInput, TextInputProps } from 'react-native';
-import { theme } from '../../config/theme';
+import { StyleSheet, TextInput, type TextInputProps } from 'react-native';
+import { COLORS } from '../../config/constants';
 
 export default function Input(props: TextInputProps): JSX.Element {
-  return <TextInput placeholderTextColor={theme.colors.muted} {...props} style={[styles.input, props.style]} />;
+  return <TextInput placeholderTextColor={COLORS.gray500} {...props} style={[styles.input, props.style]} />;
 }
 
 const styles = StyleSheet.create({
@@ -12,8 +12,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#0f172a',
     borderWidth: 1,
-    borderColor: theme.colors.border,
-    color: theme.colors.text,
+    borderColor: COLORS.gray700,
+    color: COLORS.gray100,
     paddingHorizontal: 14,
+    paddingVertical: 12,
   },
 });

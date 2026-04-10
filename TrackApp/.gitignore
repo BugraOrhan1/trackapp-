@@ -16,4 +16,5 @@ coverage/
 *.key
 *.mobileprovision
 *.orig.*
+raspberry-pi/detections.json
 

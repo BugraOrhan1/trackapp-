@@ -1,7 +1,10 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { theme } from '../../config/theme';
+import React, { useMemo } from 'react';
+import { SectionList, StyleSheet, Text, View } from 'react-native';
 import type { Detection, Report, SpeedCamera } from '../../types';
+import { COLORS } from '../../config/constants';
+import SpeedCameraCard from '../map/SpeedCameraCard';
+import ReportCard from '../reports/ReportCard';
+import DetectionCard from '../scanner/DetectionCard';
 
 type Props = {
   cameras: SpeedCamera[];
@@ -9,60 +12,78 @@ type Props = {
   detections: Detection[];
 };
 
+type SectionItem =
+  | { kind: 'camera'; item: SpeedCamera }
+  | { kind: 'report'; item: Report }
+  | { kind: 'detection'; item: Detection };
+
 export default function NearbyAlertsList({ cameras, reports, detections }: Props): JSX.Element {
+  const sections = useMemo(() => {
+    const sortedCameras = [...cameras].sort((left, right) => (left.distance ?? 99999) - (right.distance ?? 99999));
+    const sortedReports = [...reports].sort((left, right) => (left.distance ?? 99999) - (right.distance ?? 99999));
+    const sortedDetections = [...detections].sort((left, right) => (left.distanceKm ?? 99999) - (right.distanceKm ?? 99999));
+
+    return [
+      {
+        title: `📸 Flitsers (${sortedCameras.length})`,
+        data: sortedCameras.map((item) => ({ kind: 'camera' as const, item })),
+      },
+      {
+        title: `📍 Meldingen (${sortedReports.length})`,
+        data: sortedReports.map((item) => ({ kind: 'report' as const, item })),
+      },
+      ...(sortedDetections.length > 0
+        ? [
+            {
+              title: `🚨 Hulpdiensten (${sortedDetections.length})`,
+              data: sortedDetections.map((item) => ({ kind: 'detection' as const, item })),
+            },
+          ]
+        : []),
+    ];
+  }, [cameras, detections, reports]);
+
+  if (sections.every((section) => section.data.length === 0)) {
+    return (
+      <View style={styles.emptyWrap}>
+        <Text style={styles.empty}>Geen waarschuwingen in de buurt</Text>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.title}>In de buurt</Text>
-      {cameras.length ? cameras.map((camera) => (
-        <View key={camera.id} style={styles.card}>
-          <Text style={styles.item}>📸 {camera.roadName ?? 'Flitser'}</Text>
-          <Text style={styles.meta}>{typeof camera.distance === 'number' ? `${Math.round(camera.distance)} m` : '—'}</Text>
-        </View>
-      )) : null}
-      {reports.length ? reports.map((report) => (
-        <View key={report.id} style={styles.card}>
-          <Text style={styles.item}>📍 {report.type}</Text>
-          <Text style={styles.meta}>{report.address ?? 'Onbekend adres'}</Text>
-        </View>
-      )) : null}
-      {detections.length ? detections.map((detection) => (
-        <View key={detection.id} style={styles.card}>
-          <Text style={styles.item}>🚨 {detection.serviceType}</Text>
-          <Text style={styles.meta}>{detection.distanceKm.toFixed(1)} km</Text>
-        </View>
-      )) : null}
-      {!cameras.length && !reports.length && !detections.length ? <Text style={styles.empty}>Geen items gevonden</Text> : null}
-    </ScrollView>
+    <SectionList
+      sections={sections}
+      keyExtractor={(item, index) => `${item.kind}-${index}`}
+      renderSectionHeader={({ section }) => <Text style={styles.sectionHeader}>{section.title}</Text>}
+      renderItem={({ item }) => {
+        if (item.kind === 'camera') return <SpeedCameraCard camera={item.item} />;
+        if (item.kind === 'report') return <ReportCard report={item.item} onVote={() => undefined} />;
+        return <DetectionCard detection={item.item} />;
+      }}
+      stickySectionHeadersEnabled={false}
+      contentContainerStyle={styles.content}
+    />
   );
 }
 
 const styles = StyleSheet.create({
   content: {
-    gap: 10,
     paddingBottom: 12,
+    gap: 10,
   },
-  title: {
-    color: theme.colors.text,
-    fontSize: 18,
+  sectionHeader: {
+    color: COLORS.gray100,
+    fontSize: 16,
     fontWeight: '900',
+    marginTop: 8,
+    marginBottom: 8,
   },
-  card: {
-    backgroundColor: '#0f172a',
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    gap: 4,
-  },
-  item: {
-    color: theme.colors.text,
-    fontWeight: '700',
-  },
-  meta: {
-    color: theme.colors.muted,
+  emptyWrap: {
+    paddingVertical: 20,
+    alignItems: 'center',
   },
   empty: {
-    color: theme.colors.muted,
-    paddingVertical: 12,
+    color: COLORS.gray400,
   },
 });
