@@ -1,0 +1,1 @@
+export { fetchSpeedCameras } from './supabase';

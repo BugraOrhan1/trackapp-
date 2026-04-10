@@ -1,0 +1,9 @@
+export const APP_NAME = 'TrackApp';
+export const PRIMARY_COLOR = '#FF6B00';
+export const SECONDARY_COLOR = '#1A1A2E';
+export const DANGER_COLOR = '#FF1744';
+export const SUCCESS_COLOR = '#00C853';
+export const PREMIUM_COLOR = '#FFD700';
+export const NEARBY_RADIUS_KM = 10;
+export const CAMERA_ALERT_THRESHOLD_M = 1000;
+export const CONTROL_ALERT_THRESHOLD_M = 2000;
