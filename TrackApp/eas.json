@@ -13,14 +13,7 @@
         "simulator": true
       }
     },
-    "production": {
-      "ios": {
-        "bundleIdentifier": "com.bugraorhan.trackapp"
-      },
-      "android": {
-        "package": "com.bugraorhan.trackapp"
-      }
-    }
+    "production": {}
   },
   "submit": {
     "production": {
