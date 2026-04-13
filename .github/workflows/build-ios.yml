@@ -17,8 +17,7 @@ jobs:
     name: 📱 Build iOS on Mac
     runs-on: macos-15
     timeout-minutes: 90
-    env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    environment: TrackApp
 
     defaults:
       run:
@@ -36,11 +35,13 @@ jobs:
       - name: 📦 Install dependencies
         run: npm ci || npm install
 
-      - name: 🔧 Setup EAS CLI
+      - name: 🔧 Install EAS CLI
         run: npm install -g eas-cli
 
       - name: 🔑 Verify EAS Login
         run: eas whoami
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: 🔧 Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -48,11 +49,18 @@ jobs:
           xcode-version: latest-stable
 
       - name: 📱 Build iOS locally
-        run: eas build --platform ios --profile production --local --output ./build.ipa --non-interactive
+        run: |
+          eas build \
+            --platform ios \
+            --profile production \
+            --local \
+            --output ./build.ipa \
+            --non-interactive
         env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EAS_NO_VCS: 1
 
-      - name: 📤 Upload IPA
+      - name: 📤 Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: TrackApp-iOS
@@ -61,7 +69,12 @@ jobs:
 
       - name: 🚀 Submit to TestFlight
         if: ${{ github.event.inputs.submit == 'true' }}
-        run: eas submit --platform ios --path ./build.ipa --non-interactive
+        run: |
+          eas submit \
+            --platform ios \
+            --path ./build.ipa \
+            --non-interactive
         env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EXPO_APPLE_ID: ${{ secrets.APPLE_ID }}
           EXPO_APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
