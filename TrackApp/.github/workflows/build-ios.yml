@@ -1,52 +1,67 @@
-name: Build iOS App
+name: Build iOS (Local Mac - No Queue!)
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:  # Handmatig starten
+  workflow_dispatch:
+    inputs:
+      submit:
+        description: 'Submit to TestFlight?'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
-  build-ios:
-    runs-on: macos-latest
-    timeout-minutes: 60
-    
+  build:
+    name: 📱 Build iOS on Mac
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    defaults:
+      run:
+        working-directory: ./TrackApp
+
     steps:
-      # 1. Checkout code
-      - name: 📥 Checkout
+      - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      # 2. Setup Node.js
       - name: 📦 Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: TrackApp/package-lock.json
 
-      # 3. Install dependencies
       - name: 📦 Install dependencies
-        working-directory: ./TrackApp
-        run: npm ci
+        run: npm ci || npm install
 
-      # 4. Setup Expo
-      - name: 🔧 Setup Expo
-        uses: expo/expo-github-action@v8
+      - name: 🔧 Setup EAS CLI
+        run: npm install -g eas-cli
+
+      - name: 🔑 Verify EAS Login
+        run: eas whoami
+
+      - name: 🔧 Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
         with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          xcode-version: latest-stable
 
-      # 5. Build iOS
-      - name: 📱 Build iOS
-        working-directory: ./TrackApp
-        run: eas build --platform ios --profile production --non-interactive
+      - name: 📱 Build iOS locally
+        run: eas build --platform ios --profile production --local --output ./build.ipa --non-interactive
         env:
-          EXPO_APPLE_ID: ${{ secrets.APPLE_ID }}
-          EXPO_APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          EAS_NO_VCS: 1
 
-      # 6. Submit to TestFlight
+      - name: 📤 Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: TrackApp-iOS
+          path: TrackApp/build.ipa
+          retention-days: 30
+
       - name: 🚀 Submit to TestFlight
-        working-directory: ./TrackApp
-        run: eas submit --platform ios --profile production --non-interactive
+        if: ${{ github.event.inputs.submit == 'true' }}
+        run: eas submit --platform ios --path ./build.ipa --non-interactive
         env:
           EXPO_APPLE_ID: ${{ secrets.APPLE_ID }}
           EXPO_APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
