@@ -23,9 +23,6 @@ module.exports = {
         NSBluetoothPeripheralUsageDescription: 'TrackApp gebruikt Bluetooth om hulpdiensten te detecteren (Premium feature).',
         UIBackgroundModes: ['location', 'bluetooth-central'],
       },
-      config: {
-        googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS ?? '',
-      },
     },
     android: {
       adaptiveIcon: {
@@ -59,7 +56,6 @@ module.exports = {
       },
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
-      googleMapsApiKeyIos: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS ?? '',
       googleMapsApiKeyAndroid: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID ?? '',
       revenueCatApiKeyIos: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS ?? '',
       revenueCatApiKeyAndroid: process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID ?? '',

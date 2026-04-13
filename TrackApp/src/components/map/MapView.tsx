@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import MapViewBase, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapViewBase, { Marker, Circle } from 'react-native-maps';
 import type { Location, Report, SpeedCamera } from '../../types';
 
 type Props = {
@@ -21,7 +21,7 @@ export default function MapView({ center, reports = [], cameras = [] }: Props): 
 
   return (
     <View style={styles.container}>
-      <MapViewBase style={StyleSheet.absoluteFill} provider={PROVIDER_GOOGLE} initialRegion={initialRegion}>
+      <MapViewBase style={StyleSheet.absoluteFill} initialRegion={initialRegion}>
         {center ? <Marker coordinate={{ latitude: center.latitude, longitude: center.longitude }} title="Jouw locatie" /> : null}
         {cameras.map((camera) => (
           <Marker key={camera.id} coordinate={{ latitude: camera.latitude, longitude: camera.longitude }} title="Flitser" />
