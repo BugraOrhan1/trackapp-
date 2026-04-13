@@ -21,6 +21,7 @@
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
       },
       "ios": {
+        "image": "sdk-55",
         "credentialsSource": "remote"
       }
     }

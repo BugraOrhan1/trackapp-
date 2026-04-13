@@ -1,5 +1,3 @@
-require('dotenv/config');
-
 const baseConfig = require('./app.json').expo;
 
 module.exports = {
