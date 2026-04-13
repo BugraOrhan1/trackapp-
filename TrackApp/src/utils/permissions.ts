@@ -2,6 +2,11 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+type NotificationPermissionLike = {
+  status?: string;
+  granted?: boolean;
+};
+
 /**
  * Request all app permissions
  */
@@ -24,8 +29,8 @@ export async function requestAllPermissions(): Promise<{
     results.backgroundLocation = bgStatus === 'granted';
   }
 
-  const { status: notifStatus } = await Notifications.requestPermissionsAsync();
-  results.notifications = notifStatus === 'granted';
+  const notifPermission = (await Notifications.requestPermissionsAsync()) as NotificationPermissionLike;
+  results.notifications = notifPermission.status === 'granted' || notifPermission.granted === true;
 
   return results;
 }
@@ -36,12 +41,12 @@ export async function requestAllPermissions(): Promise<{
 export async function checkPermissions() {
   const { status: locationStatus } = await Location.getForegroundPermissionsAsync();
   const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
-  const { status: notifStatus } = await Notifications.getPermissionsAsync();
+  const notifPermission = (await Notifications.getPermissionsAsync()) as NotificationPermissionLike;
 
   return {
     location: locationStatus === 'granted',
     backgroundLocation: bgStatus === 'granted',
-    notifications: notifStatus === 'granted',
+    notifications: notifPermission.status === 'granted' || notifPermission.granted === true,
   };
 }
 
@@ -52,7 +57,7 @@ export async function ensureLocationPermission() {
 }
 
 export async function ensureNotificationPermission() {
-  const perm = await Notifications.requestPermissionsAsync();
-  if (!perm.granted) throw new Error('Notification permission denied');
+  const perm = (await Notifications.requestPermissionsAsync()) as NotificationPermissionLike;
+  if (perm.status !== 'granted' && perm.granted !== true) throw new Error('Notification permission denied');
   return perm;
 }
