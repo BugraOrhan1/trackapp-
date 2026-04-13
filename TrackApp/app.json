@@ -18,10 +18,15 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.bugraorhan.trackapp",
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "TrackApp gebruikt je locatie om waarschuwingen te tonen voor flitsers en hulpdiensten in de buurt.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "TrackApp gebruikt je locatie om real-time waarschuwingen te tonen, ook op de achtergrond.",
         "NSBluetoothAlwaysUsageDescription": "TrackApp gebruikt Bluetooth om te verbinden met je Raspberry Pi scanner (alleen Premium).",
-        "NSBluetoothPeripheralUsageDescription": "TrackApp gebruikt Bluetooth om hulpdiensten te detecteren (Premium feature)."
+        "NSBluetoothPeripheralUsageDescription": "TrackApp gebruikt Bluetooth om hulpdiensten te detecteren (Premium feature).",
+        "UIBackgroundModes": [
+          "location",
+          "bluetooth-central"
+        ]
       },
       "config": {
         "googleMapsApiKey": ""

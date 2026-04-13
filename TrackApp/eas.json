@@ -15,7 +15,11 @@
       }
     },
     "production": {
-      "autoIncrement": true
+      "environment": "production",
+      "autoIncrement": true,
+      "ios": {
+        "credentialsSource": "remote"
+      }
     }
   },
   "submit": {
