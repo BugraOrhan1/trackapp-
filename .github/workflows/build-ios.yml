@@ -48,6 +48,7 @@ jobs:
           eas build \
             --platform ios \
             --profile production \
+            --clear-cache \
             --non-interactive \
             --no-wait
         env:
