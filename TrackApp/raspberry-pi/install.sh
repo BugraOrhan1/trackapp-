@@ -2,11 +2,14 @@
 set -euo pipefail
 
 sudo apt-get update
-sudo apt-get install -y python3 python3-pip python3-venv git build-essential libusb-1.0-0-dev bluez bluez-tools python3-rpi.gpio
+sudo apt-get install -y python3-full python3-venv git build-essential libusb-1.0-0-dev bluez bluez-tools python3-rpi.gpio
 
-python3 -m pip install --upgrade pip
-python3 -m pip install numpy pydbus pycairo pygobject
-python3 -m pip install pyrtlsdr
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_DIR="$ROOT_DIR/.venv"
+
+python3 -m venv --system-site-packages "$VENV_DIR"
+"$VENV_DIR/bin/python" -m pip install --upgrade pip
+"$VENV_DIR/bin/pip" install numpy pydbus pycairo pygobject pyrtlsdr
 
 if [ -f trackapp-pi.service ]; then
 	sudo cp trackapp-pi.service /etc/systemd/system/trackapp-pi.service
