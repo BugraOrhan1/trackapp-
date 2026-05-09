@@ -38,6 +38,6 @@ sudo systemctl status trackapp-pi.service
 
 If your repo is not located in `/home/pi/trackapp/TrackApp/raspberry-pi`, update `WorkingDirectory` and `ExecStart` inside the service file first.
 
-## Python environment
-The installer creates a local `.venv` inside this folder and the boot script uses it automatically.
-This avoids the Raspberry Pi OS "externally-managed-environment" error from system Python.
+## Python install mode
+The installer now uses Raspberry Pi OS system Python with `--break-system-packages` for the required packages.
+Use this only on the Pi you want to dedicate to TrackApp.

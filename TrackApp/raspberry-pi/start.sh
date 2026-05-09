@@ -4,15 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
-VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
-if [ ! -x "$VENV_PYTHON" ]; then
-  echo "Missing virtual environment at $ROOT_DIR/.venv. Run install.sh first."
-  exit 1
-fi
-
-"$VENV_PYTHON" target_blue_eye_scanner.py --start 380 --stop 400 --step 0.2 --interval 8 --leds &
+python3 target_blue_eye_scanner.py --start 380 --stop 400 --step 0.2 --interval 8 --leds &
 SCANNER_PID=$!
-"$VENV_PYTHON" ble_server.py &
+python3 ble_server.py &
 BLE_PID=$!
 
 cleanup() {
