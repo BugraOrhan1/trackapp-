@@ -41,3 +41,12 @@ If your repo is not located in `/home/pi/trackapp/TrackApp/raspberry-pi`, update
 ## Python install mode
 The installer now uses Raspberry Pi OS system Python with `--break-system-packages` for the required packages.
 Use this only on the Pi you want to dedicate to TrackApp.
+
+## One-command start
+After cloning the repo on the Pi, this is the one command you need:
+
+```bash
+sudo bash install.sh
+```
+
+The installer will create the systemd service with the current user and repo path, enable it, and start it right away.
