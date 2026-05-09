@@ -8,4 +8,10 @@ python3 -m pip install --upgrade pip
 python3 -m pip install numpy pydbus pycairo pygobject
 python3 -m pip install pyrtlsdr
 
+if [ -f trackapp-pi.service ]; then
+	sudo cp trackapp-pi.service /etc/systemd/system/trackapp-pi.service
+	sudo systemctl daemon-reload
+	sudo systemctl enable trackapp-pi.service
+fi
+
 echo "TrackApp Raspberry Pi dependencies installed."

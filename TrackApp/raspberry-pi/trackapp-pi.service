@@ -1,0 +1,16 @@
+[Unit]
+Description=TrackApp Raspberry Pi scanner and BLE service
+After=network-online.target bluetooth.service
+Wants=network-online.target bluetooth.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/trackapp/TrackApp/raspberry-pi
+ExecStart=/bin/bash /home/pi/trackapp/TrackApp/raspberry-pi/start.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

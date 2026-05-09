@@ -23,3 +23,17 @@ Use this command if you want the LEDs enabled explicitly:
 ## Notes
 - Intended for Raspberry Pi OS / Linux with BlueZ.
 - Requires an RTL-SDR dongle for live scanning.
+- `install.sh` now also installs and enables the `trackapp-pi.service` systemd unit.
+
+## Auto start on boot
+Use the bundled systemd service to start the scanner automatically after reboot.
+
+```bash
+sudo cp trackapp-pi.service /etc/systemd/system/trackapp-pi.service
+sudo systemctl daemon-reload
+sudo systemctl enable trackapp-pi.service
+sudo systemctl start trackapp-pi.service
+sudo systemctl status trackapp-pi.service
+```
+
+If your repo is not located in `/home/pi/trackapp/TrackApp/raspberry-pi`, update `WorkingDirectory` and `ExecStart` inside the service file first.
