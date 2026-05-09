@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
-python3 target_blue_eye_scanner.py --start 380 --stop 400 --step 0.2 --interval 8 &
+python3 target_blue_eye_scanner.py --start 380 --stop 400 --step 0.2 --interval 8 --leds &
 SCANNER_PID=$!
 python3 ble_server.py &
 BLE_PID=$!
