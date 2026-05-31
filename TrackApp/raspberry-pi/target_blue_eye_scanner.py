@@ -253,12 +253,30 @@ def main() -> int:
     parser.set_defaults(leds=True)
     args = parser.parse_args()
 
-    if RtlSdr is None:
-        print("rtlsdr is not installed. Install dependencies first.")
-        return 1
-
     led_controller = LedController(LED_PINS, enabled=args.leds)
     led_state = LedStateManager()
+
+    # If the rtlsdr Python module is unavailable, run a safe demo loop so the
+    # service stays up and you can verify LED wiring without hardware.
+    if RtlSdr is None:
+        print("rtlsdr is not installed. Entering demo LED mode (no hardware).")
+        try:
+            demo_sequence = [0.0, 17.0, 21.0, 29.0, 0.0]
+            idx = 0
+            while True:
+                max_power = demo_sequence[idx % len(demo_sequence)]
+                active_labels = led_state.update(max_power)
+                led_controller.set_active_labels(active_labels)
+                payload = {"updated_at": time.time(), "detections": [{"frequency_mhz": 0.0, "power_db": max_power, "timestamp": time.time(), "label": "simulated"}]}
+                DETECTIONS_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+                if active_labels:
+                    print(f"Demo max_power={max_power:.1f} dB | LEDs: {', '.join(active_labels)}")
+                else:
+                    print(f"Demo max_power={max_power:.1f} dB | LEDs: off")
+                idx += 1
+                time.sleep(args.interval)
+        finally:
+            led_controller.close()
 
     print(f"Scanning {args.start:.1f}-{args.stop:.1f} MHz every {args.interval}s...")
     try:
