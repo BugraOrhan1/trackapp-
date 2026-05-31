@@ -218,8 +218,29 @@ class Application(object):
 class GattManager:
     def __init__(self):
         self.bus = SystemBus()
-        self.adapter = self.bus[TRACKAPP_SERVICE_NAME][ADAPTER_PATH]
-        self.adapter.Powered = True
+
+        # Obtain BlueZ adapter proxy in a way that works across pydbus versions.
+        self.adapter = None
+        try:
+            # Some pydbus versions support index access: bus[service][path]
+            self.adapter = self.bus[TRACKAPP_SERVICE_NAME][ADAPTER_PATH]
+        except Exception:
+            try:
+                # Others expose a get(service, path) helper
+                self.adapter = self.bus.get(TRACKAPP_SERVICE_NAME, ADAPTER_PATH)
+            except Exception:
+                try:
+                    # Fallback: get the service root object (may still expose adapter methods)
+                    self.adapter = self.bus.get(TRACKAPP_SERVICE_NAME)
+                except Exception as exc:
+                    raise RuntimeError(f"Unable to access BlueZ adapter on bus: {exc}")
+
+        # Try to power on adapter if possible; not fatal if it fails.
+        try:
+            self.adapter.Powered = True
+        except Exception:
+            pass
+
         self.app = Application()
         self.advertisement = Advertisement(self.bus)
 
