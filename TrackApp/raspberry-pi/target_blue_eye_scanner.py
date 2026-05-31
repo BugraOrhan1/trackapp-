@@ -47,11 +47,13 @@ LABELS = {
     4: "defense",
 }
 
+# Unified, distance-based LED mapping (not per-service). Keys are colour labels
+# used by `get_active_labels()` to decide which LEDs to turn on.
 LED_PINS = {
-    "police": 17,
-    "ambulance": 27,
-    "fire": 22,
-    "defense": 23,
+    "red": 23,      # dichtbij
+    "orange": 27,   # middel
+    "yellow": 17,   # middel
+    "green": 22,    # heel ver of geen
 }
 
 
@@ -163,8 +165,24 @@ def write_detections(detections: list[Detection]) -> None:
 
 
 def get_active_labels(detections: list[Detection]) -> list[str]:
-    labels = {detection.label for detection in detections if detection.label in LED_PINS}
-    return sorted(labels)
+    # Unified indicator: decide LEDs by the strongest detected signal (proximity).
+    if not detections:
+        return []
+
+    max_power = max(d.power_db for d in detections)
+
+    # Thresholds are tuned from the previous classification logic.
+    if max_power >= 28:
+        # Very close -> red
+        return ["red"]
+    if max_power >= 20:
+        # Medium distance -> both middle LEDs on
+        return ["yellow", "orange"]
+    if max_power >= 16:
+        # Far (weak) -> green
+        return ["green"]
+
+    return []
 
 
 def main() -> int:

@@ -9,13 +9,19 @@ This folder contains the Target Blue Eye scanner and BLE GATT server used by the
 - `start.sh` runs the scanner and BLE server together.
 
 ## GPIO LEDs
-The scanner can also drive 4 LEDs on the Raspberry Pi using BCM numbering:
-- `police` -> GPIO 17
-- `ambulance` -> GPIO 27
-- `fire` -> GPIO 22
-- `defense` -> GPIO 23
+The scanner drives 4 LEDs on the Raspberry Pi using BCM numbering. LEDs indicate proximity to any detected emergency service (combined indicator), not the specific service type:
+- `red` -> GPIO 23 (dichtbij)
+- `orange` -> GPIO 27 (middel)
+- `yellow` -> GPIO 17 (middel)
+- `green` -> GPIO 22 (heel ver of geen)
 
-When one of those service types is detected, the matching LED stays on until the next scan result clears it. If `RPi.GPIO` is not installed or the code is run off-Pi, LED output is disabled automatically.
+When any service is detected, the LEDs represent distance (not the individual service):
+- Zeer dichtbij: `red` aan.
+- Middelafstand: `yellow` en `orange` aan.
+- Ver (zwak): `green` aan.
+- Geen detecties: alle LEDs uit.
+
+If `RPi.GPIO` is not installed or the code is run off-Pi, LED output is disabled automatically.
 
 Use this command if you want the LEDs enabled explicitly:
 `python3 target_blue_eye_scanner.py --leds`
@@ -50,3 +56,5 @@ sudo bash install.sh
 ```
 
 The installer will create the systemd service with the current user and repo path, enable it, and start it right away.
+
+After running the installer once, the scanner will run automatically on boot — you do not need to SSH in or manually start it again.
