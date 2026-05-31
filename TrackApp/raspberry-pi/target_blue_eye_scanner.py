@@ -19,10 +19,18 @@ from collections import deque
 
 import numpy as np
 
+RtlSdr = None
 try:
-    from rtlsdr import RtlSdr
-except ImportError:  # pragma: no cover - hardware dependency
-    RtlSdr = None
+    # Some installations expose the Python binding as 'rtlsdr'.
+    from rtlsdr import RtlSdr as _RtlSdr  # type: ignore
+    RtlSdr = _RtlSdr
+except Exception:
+    try:
+        # Fallback to 'pyrtlsdr' package if available (provides RtlSdr class).
+        from pyrtlsdr import RtlSdr as _RtlSdr  # type: ignore
+        RtlSdr = _RtlSdr
+    except Exception:
+        RtlSdr = None
 
 
 BASE_DIR = Path(__file__).resolve().parent
