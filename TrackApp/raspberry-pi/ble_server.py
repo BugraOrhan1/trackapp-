@@ -16,7 +16,28 @@ from typing import Any
 from gi.repository import GLib  # type: ignore[import-not-found]
 from dbus.mainloop.glib import DBusGMainLoop  # type: ignore[import-not-found]
 from pydbus import SystemBus  # type: ignore[import-not-found]
-from pydbus.generic import signal as dbus_signal  # type: ignore[import-not-found]
+from pydbus.generic import signal as _pydbus_signal  # type: ignore[import-not-found]
+
+
+def dbus_signal(*dargs, **dkwargs):
+    """
+    Compatibility wrapper for pydbus.generic.signal.
+
+    Some pydbus versions do not accept a 'signature' keyword argument
+    in the decorator factory. Try calling the original with kwargs,
+    then without kwargs, and finally fall back to a no-op decorator
+    to avoid import-time TypeError crashes.
+    """
+    try:
+        return _pydbus_signal(*dargs, **dkwargs)
+    except TypeError:
+        try:
+            return _pydbus_signal(*dargs)
+        except Exception:
+            def _noop(func):
+                return func
+
+            return _noop
 
 BASE_DIR = Path(__file__).resolve().parent
 DETECTIONS_FILE = BASE_DIR / "detections.json"
