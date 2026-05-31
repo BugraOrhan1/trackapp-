@@ -15,6 +15,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
+from collections import deque
 
 import numpy as np
 
@@ -165,24 +166,79 @@ def write_detections(detections: list[Detection]) -> None:
 
 
 def get_active_labels(detections: list[Detection]) -> list[str]:
-    # Unified indicator: decide LEDs by the strongest detected signal (proximity).
+    # Backwards-compat function kept for callers that expect it.
     if not detections:
         return []
-
     max_power = max(d.power_db for d in detections)
-
-    # Thresholds are tuned from the previous classification logic.
     if max_power >= 28:
-        # Very close -> red
         return ["red"]
     if max_power >= 20:
-        # Medium distance -> both middle LEDs on
         return ["yellow", "orange"]
     if max_power >= 16:
-        # Far (weak) -> green
         return ["green"]
-
     return []
+
+
+class LedStateManager:
+    """Stateful manager for LED activation with persistence and hysteresis.
+
+    - Keeps a short history of recent max power readings.
+    - Requires `required_hits` of readings above a threshold within the history
+      to trigger an LED state.
+    - After a state is active, it is held for `hold_scans` additional cycles
+      to avoid flicker when a signal briefly disappears.
+    """
+
+    def __init__(
+        self,
+        red_thresh: float = 28.0,
+        medium_thresh: float = 20.0,
+        far_thresh: float = 16.0,
+        history_size: int = 3,
+        required_hits: int = 2,
+        hold_scans: int = 2,
+    ) -> None:
+        self.red_thresh = red_thresh
+        self.medium_thresh = medium_thresh
+        self.far_thresh = far_thresh
+        self.history: deque[float] = deque(maxlen=history_size)
+        self.required_hits = required_hits
+        self.hold_scans = hold_scans
+        self.hold_counter = 0
+        self.current_labels: list[str] = []
+
+    def update(self, max_power: float) -> list[str]:
+        # record
+        self.history.append(max_power)
+
+        red_hits = sum(1 for v in self.history if v >= self.red_thresh)
+        medium_hits = sum(1 for v in self.history if v >= self.medium_thresh)
+        far_hits = sum(1 for v in self.history if v >= self.far_thresh)
+
+        # Decide new labels based on counts in history
+        if red_hits >= self.required_hits:
+            labels = ["red"]
+        elif medium_hits >= self.required_hits:
+            labels = ["yellow", "orange"]
+        elif far_hits >= self.required_hits:
+            labels = ["green"]
+        else:
+            labels = []
+
+        if labels:
+            # Activate new state and reset hold counter
+            self.current_labels = labels
+            self.hold_counter = self.hold_scans
+            return labels
+
+        # No new detection: hold previous state for a few scans to avoid flicker
+        if self.hold_counter > 0:
+            self.hold_counter -= 1
+            return self.current_labels
+
+        # Clear state
+        self.current_labels = []
+        return []
 
 
 def main() -> int:
@@ -202,6 +258,7 @@ def main() -> int:
         return 1
 
     led_controller = LedController(LED_PINS, enabled=args.leds)
+    led_state = LedStateManager()
 
     print(f"Scanning {args.start:.1f}-{args.stop:.1f} MHz every {args.interval}s...")
     try:
@@ -210,15 +267,17 @@ def main() -> int:
                 detections = scan_once(args.start, args.stop, args.step)
                 write_detections(detections)
 
-                active_labels = get_active_labels(detections)
+                # Determine smoothed/persistent LED labels using recent max power
+                max_power = max((d.power_db for d in detections), default=0.0)
+                active_labels = led_state.update(max_power)
                 led_controller.set_active_labels(active_labels)
 
                 if active_labels:
                     print(
-                        f"Saved {len(detections)} detections to {DETECTIONS_FILE} | LEDs: {', '.join(active_labels)}"
+                        f"Saved {len(detections)} detections to {DETECTIONS_FILE} | max_power={max_power:.1f} dB | LEDs: {', '.join(active_labels)}"
                     )
                 else:
-                    print(f"Saved {len(detections)} detections to {DETECTIONS_FILE} | LEDs: off")
+                    print(f"Saved {len(detections)} detections to {DETECTIONS_FILE} | max_power={max_power:.1f} dB | LEDs: off")
             except Exception as exc:  # pragma: no cover - hardware/runtime issues
                 led_controller.all_off()
                 print(f"Scan error: {exc}")

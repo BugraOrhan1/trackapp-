@@ -58,3 +58,16 @@ sudo bash install.sh
 The installer will create the systemd service with the current user and repo path, enable it, and start it right away.
 
 After running the installer once, the scanner will run automatically on boot — you do not need to SSH in or manually start it again.
+
+Notes:
+- By default the systemd service only runs the scanner (LEDs) — the BLE server is optional.
+- To enable the BLE server set the `START_BLE` environment variable to `1` in the service or run `start.sh` manually:
+
+```bash
+# enable BLE for the current boot (manual run)
+START_BLE=1 /bin/bash start.sh
+
+# to persistently enable BLE, edit /etc/systemd/system/trackapp-pi.service and add:
+# Environment=START_BLE=1
+# then reload: sudo systemctl daemon-reload && sudo systemctl restart trackapp-pi.service
+```
