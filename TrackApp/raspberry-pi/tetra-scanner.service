@@ -1,0 +1,22 @@
+[Unit]
+Description=TETRA Signal Scanner (380-400 MHz)
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sleep 10
+ExecStart=/opt/tetra-scanner/venv/bin/python3 /opt/tetra-scanner/scanner.py
+WorkingDirectory=/opt/tetra-scanner
+Restart=always
+RestartSec=10
+User=root
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tetra-scanner
+MemoryLimit=128M
+CPUQuota=80%
+
+[Install]
+WantedBy=multi-user.target

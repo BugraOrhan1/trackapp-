@@ -1,73 +1,117 @@
-# TrackApp Raspberry Pi
+# TETRA Signal Scanner
 
-This folder contains the Target Blue Eye scanner and BLE GATT server used by the TrackApp premium scanner flow.
+## Signaalsterkte scanner voor 380-400 MHz met LED indicatie
 
-## Files
-- `target_blue_eye_scanner.py` scans 380-400 MHz with an RTL-SDR dongle and writes snapshots to `detections.json`.
-- `ble_server.py` exposes the latest scanner data via a BlueZ GATT service.
-- `install.sh` installs the dependencies.
-- `start.sh` runs the scanner and BLE server together.
+### Hardware
+- Raspberry Pi Zero 2 W
+- RTL-SDR 2832 USB dongle
+- 4x LED + weerstanden (330Ω)
 
-## GPIO LEDs
-The scanner drives 4 LEDs on the Raspberry Pi using BCM numbering. LEDs indicate proximity to any detected emergency service (combined indicator), not the specific service type:
-- `red` -> GPIO 23 (dichtbij)
-- `orange` -> GPIO 27 (middel)
-- `yellow` -> GPIO 17 (middel)
-- `green` -> GPIO 22 (heel ver of geen)
+### LED Aansluiting (BCM nummering)
+GPIO 22 ──[330Ω]──[GROENE LED]──GND (ver weg)
+GPIO 17 ──[330Ω]──[GELE LED]───GND (middelmatig)
+GPIO 27 ──[330Ω]──[ORANJE LED]─GND (dichterbij)
+GPIO 23 ──[330Ω]──[RODE LED]───GND (heel dichtbij)
 
-When any service is detected, the LEDs represent distance (not the individual service):
-- Zeer dichtbij: `red` aan.
-- Middelafstand: `yellow` en `orange` aan.
-- Ver (zwak): `green` aan.
-- Geen detecties: alle LEDs uit.
+### Installatie
 
-If `RPi.GPIO` is not installed or the code is run off-Pi, LED output is disabled automatically.
-
-Use this command if you want the LEDs enabled explicitly:
-`python3 target_blue_eye_scanner.py --leds`
-
-## Notes
-- Intended for Raspberry Pi OS / Linux with BlueZ.
-- Requires an RTL-SDR dongle for live scanning.
-- `install.sh` now also installs and enables the `trackapp-pi.service` systemd unit.
-
-## Auto start on boot
-Use the bundled systemd service to start the scanner automatically after reboot.
+1. Sluit de Pi aan op internet (WiFi)
+2. Kopieer alle bestanden naar de Pi
+3. Voer uit:
 
 ```bash
-sudo cp trackapp-pi.service /etc/systemd/system/trackapp-pi.service
-sudo systemctl daemon-reload
-sudo systemctl enable trackapp-pi.service
-sudo systemctl start trackapp-pi.service
-sudo systemctl status trackapp-pi.service
+chmod +x install.sh
+sudo ./install.sh
+sudo reboot
 ```
 
-If your repo is not located in `/home/pi/trackapp/TrackApp/raspberry-pi`, update `WorkingDirectory` and `ExecStart` inside the service file first.
+Na herstart start de scanner automatisch. Geen internet meer nodig.
 
-## Python install mode
-The installer now uses Raspberry Pi OS system Python with `--break-system-packages` for the required packages.
-Use this only on the Pi you want to dedicate to TrackApp.
-
-## One-command start
-After cloning the repo on the Pi, this is the one command you need:
+### Kalibratie
 
 ```bash
-sudo bash install.sh
+cd /opt/tetra-scanner
+sudo venv/bin/python3 calibrate.py
 ```
 
-The installer will create the systemd service with the current user and repo path, enable it, and start it right away.
-
-After running the installer once, the scanner will run automatically on boot — you do not need to SSH in or manually start it again.
-
-Notes:
-- By default the systemd service only runs the scanner (LEDs) — the BLE server is optional.
-- To enable the BLE server set the `START_BLE` environment variable to `1` in the service or run `start.sh` manually:
+### Commando's
 
 ```bash
-# enable BLE for the current boot (manual run)
-START_BLE=1 /bin/bash start.sh
-
-# to persistently enable BLE, edit /etc/systemd/system/trackapp-pi.service and add:
-# Environment=START_BLE=1
-# then reload: sudo systemctl daemon-reload && sudo systemctl restart trackapp-pi.service
+sudo systemctl start tetra-scanner
+sudo systemctl stop tetra-scanner
+sudo systemctl restart tetra-scanner
+sudo systemctl status tetra-scanner
+sudo journalctl -u tetra-scanner -f
 ```
+
+### Drempelwaarden aanpassen
+
+Bewerk `/opt/tetra-scanner/config.py` en herstart de service.
+
+### Hoe het werkt
+
+- De RTL-SDR scant continu het 380-400 MHz bereik
+- Per frequentie wordt het vermogen gemeten
+- Een adaptieve ruisvloer filtert constante signalen (masten)
+- Alleen signalen boven het normale niveau activeren LEDs
+- Het systeem past zich automatisch aan de omgeving aan
+
+### Bestanden
+
+- scanner.py - Hoofdprogramma
+- config.py - Alle instellingen
+- led_controller.py - LED aansturing
+- signal_analyzer.py - Signaal analyse
+- calibrate.py - Kalibratie tool
+- install.sh - Installatie script
+
+---
+
+## Schema voor LED bedrading
+
+```text
+Raspberry Pi Zero 2 W
+┌─────────┐
+│         │
+│ GPIO22 ├───[330Ω]───[GROEN]───┐
+│ GPIO17 ├───[330Ω]───[GEEL ]───┤
+│ GPIO27 ├───[330Ω]───[ORANJE]──┤
+│ GPIO23 ├───[330Ω]───[ROOD ]──┤
+│ GND    ├────────────────────────┘
+│ USB    ├───[RTL-SDR 2832 Dongle]
+└─────────┘
+```
+
+### Installatieproces
+
+```bash
+# 1. Download/kopieer alle bestanden naar Pi
+# (via SCP, USB stick, of git)
+
+# 2. Op de Pi (via SSH of terminal):
+cd /pad/naar/tetra-scanner/
+chmod +x install.sh
+sudo ./install.sh
+
+# 3. Herstart
+sudo reboot
+
+# 4. Na herstart - scanner draait automatisch!
+# Check status:
+sudo systemctl status tetra-scanner
+
+# 5. Optioneel: kalibreer voor jouw locatie
+cd /opt/tetra-scanner
+sudo venv/bin/python3 calibrate.py
+```
+
+### Het systeem
+
+- Start automatisch bij elke boot
+- Werkt offline - geen internet nodig na installatie
+- Past zich aan aan nabije masten via adaptieve ruisvloer
+- Groen = signaal gedetecteerd maar ver weg
+- Geel = middelmatige signaalsterkte
+- Oranje = behoorlijk sterk signaal
+- Rood = zeer sterk signaal (bron dichtbij)
+- Alle LEDs uit = geen opmerkelijk signaal boven achtergrondniveau
