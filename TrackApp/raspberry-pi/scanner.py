@@ -220,15 +220,19 @@ class TetraScanner:
 
                 consecutive_errors = 0
                 smart_result = self.smart.update(result)
+                # Update learning indicator
+                self.led.set_learning(smart_result.get('learning', False))
+                
                 if smart_result['learning']:
-                    self.led.set_level(result['level'])
+                    # Tijdens leren: GEEN LEDs voor signaal (alleen rood knipper)
+                    self.led.set_level(0)
                 else:
                     self.led.set_level(smart_result['level'])
                     # Trigger special effects
                     if smart_result.get('burst_detected'):
-                        self.led.trigger_burst()
+                        # self.led.trigger_burst()
                     if smart_result.get('movement_detected'):
-                        self.led.trigger_movement()
+                        # self.led.trigger_movement()
                 self._log_scan_data(result)
                 self._print_status(result)
                 time.sleep(SCAN_INTERVAL)

@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-Ultra LED Controller v3.0
-- Heartbeat (groen knippert = leeft)
-- Verschillende patterns voor verschillende events
-- Burst flash
-- Movement pulse
-- Error patterns
-- Smooth transitions
-"""
+"""LED Controller v4.0 met leer indicator"""
 import time
 import logging
 import threading
@@ -40,9 +32,12 @@ class LEDController:
         self.heartbeat_running = False
         self.heartbeat_thread = None
         
-        # Special effects
+        # Status flags
+        self.is_learning = True
+        self.is_ready = False
         self.burst_pending = False
         self.movement_pending = False
+        self.calibration_pending = False
         self.lock = threading.Lock()
         
         self._setup_gpio()
@@ -66,34 +61,40 @@ class LEDController:
             logger.error("GPIO init mislukt: %s", e)
 
     def _startup_sequence(self):
-        """Knight Rider effect bij opstarten"""
+        """Knight Rider effect"""
         if not GPIO_AVAILABLE:
             return
         leds = [LED_GREEN, LED_YELLOW, LED_ORANGE, LED_RED]
-        # Heen
         for pin in leds:
             GPIO.output(pin, GPIO.HIGH)
             time.sleep(0.1)
             GPIO.output(pin, GPIO.LOW)
-        # Terug
         for pin in reversed(leds):
             GPIO.output(pin, GPIO.HIGH)
             time.sleep(0.1)
             GPIO.output(pin, GPIO.LOW)
-        # Alles aan
-        for pin in leds:
-            GPIO.output(pin, GPIO.HIGH)
-        time.sleep(0.3)
-        # Alles uit
-        for pin in leds:
-            GPIO.output(pin, GPIO.LOW)
-        time.sleep(0.2)
-        # Bevestiging: 2x snel groen
-        for _ in range(2):
-            GPIO.output(LED_GREEN, GPIO.HIGH)
-            time.sleep(0.1)
-            GPIO.output(LED_GREEN, GPIO.LOW)
-            time.sleep(0.1)
+
+    def set_learning(self, learning):
+        """Schakel leermodus aan/uit"""
+        if not learning and self.is_learning:
+            # Net klaar met leren - viering!
+            self.is_learning = False
+            self.is_ready = True
+            if GPIO_AVAILABLE:
+                # Groen 3x snel knipperen = KLAAR
+                for _ in range(3):
+                    GPIO.output(LED_GREEN, GPIO.HIGH)
+                    time.sleep(0.15)
+                    GPIO.output(LED_GREEN, GPIO.LOW)
+                    time.sleep(0.15)
+            logger.info("KLAAR voor gebruik! Scanner is actief.")
+        elif learning:
+            self.is_learning = True
+            self.is_ready = False
+
+    def set_calibrating(self, cal):
+        """Visuele indicator voor kalibratie"""
+        self.calibration_pending = cal
 
     def _start_heartbeat(self):
         if not GPIO_AVAILABLE:
@@ -103,7 +104,7 @@ class LEDController:
         self.heartbeat_thread.start()
 
     def _heartbeat_loop(self):
-        """Slimme heartbeat met effects"""
+        """Slimme heartbeat met verschillende patterns"""
         last_beat = 0
         while self.heartbeat_running:
             try:
@@ -121,22 +122,37 @@ class LEDController:
                             for pin in ALL_LEDS:
                                 GPIO.output(pin, GPIO.LOW)
                             time.sleep(0.05)
-                        # Herstel level
                         self._update_leds()
                 
-                # Movement pulse (huidige level pulse)
+                # Movement pulse
                 elif self.movement_pending:
                     with self.lock:
                         self.movement_pending = False
                     if GPIO_AVAILABLE and self.current_level > 0:
-                        # Dubbele pulse
                         for _ in range(2):
                             self._set_leds_off()
                             time.sleep(0.1)
                             self._update_leds()
                             time.sleep(0.1)
                 
-                # Normale heartbeat
+                # Kalibratie indicator - geel knippert
+                elif self.calibration_pending:
+                    if GPIO_AVAILABLE:
+                        GPIO.output(LED_YELLOW, GPIO.HIGH)
+                        time.sleep(0.15)
+                        GPIO.output(LED_YELLOW, GPIO.LOW)
+                        time.sleep(0.15)
+                
+                # LEREN indicator - rood knippert elke 2 sec
+                elif self.is_learning and self.current_level == self.LEVEL_OFF:
+                    if (now - last_beat) >= 2.0:
+                        if GPIO_AVAILABLE:
+                            GPIO.output(LED_RED, GPIO.HIGH)
+                            time.sleep(0.15)
+                            GPIO.output(LED_RED, GPIO.LOW)
+                        last_beat = now
+                
+                # KLAAR indicator - groen knippert elke 3 sec (heartbeat)
                 elif self.current_level == self.LEVEL_OFF and (now - last_beat) >= 3.0:
                     if GPIO_AVAILABLE:
                         GPIO.output(LED_GREEN, GPIO.HIGH)
@@ -151,12 +167,10 @@ class LEDController:
                 time.sleep(1.0)
 
     def trigger_burst(self):
-        """Trigger burst effect"""
         with self.lock:
             self.burst_pending = True
 
     def trigger_movement(self):
-        """Trigger movement pulse"""
         with self.lock:
             self.movement_pending = True
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smart Analyzer v4.0 - Burst priority for hulpdiensten"""
+"""Smart Analyzer v4.2 - Werkende versie"""
 import time
 import logging
 import numpy as np
@@ -13,38 +13,38 @@ logger = logging.getLogger('tetra-scanner.smart')
 class SmartAnalyzer:
     def __init__(self):
         self.freq_profiles = {}
-        # Strenger voor masten - 10 strikes nodig
-        self.STABLE_STRIKES = 10
-        self.MAX_STRIKES = 30
-        self.HISTORY_LENGTH = 80
-        # Strenger voor stabiliteit
-        self.STD_STABLE_THRESHOLD = 2.0
-        self.MOVEMENT_THRESHOLD = 5.0
-        # Burst sensitivity - lager = gevoeliger
-        self.BURST_MIN_POWER = 20.0
-        self.BURST_MAX_AGE = 5
+        self.STABLE_STRIKES = 7
+        self.MAX_STRIKES = 25
+        self.HISTORY_LENGTH = 60
+        self.STD_STABLE_THRESHOLD = 2.5
+        self.MOVEMENT_THRESHOLD = 8.0
+        self.BURST_MIN_POWER = 30.0
+        self.STRONG_MAST_THRESHOLD = 48.0
         
         self.total_scans = 0
         self.location_signature = None
         self.location_changed_count = 0
-        self.LOCATION_CHANGE_THRESHOLD = 8
+        self.LOCATION_CHANGE_THRESHOLD = 5
         
         self.detections_count = 0
         self.last_detection_time = 0
         self.session_start = time.time()
-        
-        # False positive filter
-        self.recent_false_positives = deque(maxlen=20)
         
         self.last_result = self._empty_result()
         self._load_known_masts()
 
     def _empty_result(self):
         return {
-            'has_mobile': False, 'mobile_count': 0, 'mobile_signals': [],
-            'mast_count': 0, 'level': 0, 'learning': True,
-            'movement_detected': False, 'burst_detected': False,
-            'total_scans': 0, 'session_detections': 0
+            'has_mobile': False,
+            'mobile_count': 0,
+            'mobile_signals': [],
+            'mast_count': 0,
+            'level': 0,
+            'learning': True,
+            'movement_detected': False,
+            'burst_detected': False,
+            'total_scans': 0,
+            'session_detections': 0
         }
 
     def _freq_key(self, freq_mhz):
@@ -58,16 +58,15 @@ class SmartAnalyzer:
                     data = json.load(f)
                     for fk_str, info in data.get('masts', {}).items():
                         fk = float(fk_str)
-                        avg = info.get('avg_power', 50)
                         self.freq_profiles[fk] = {
                             'freq_mhz': info['freq_mhz'],
-                            'history': deque([avg] * 8, maxlen=self.HISTORY_LENGTH),
+                            'history': deque([info.get('avg_power', 50)] * 5, maxlen=self.HISTORY_LENGTH),
                             'strikes': self.STABLE_STRIKES,
                             'is_stable': True,
                             'last_seen': time.time(),
                             'first_seen': time.time(),
                             'pre_learned': True,
-                            'avg_power': avg
+                            'avg_power': info.get('avg_power', 50)
                         }
                 logger.info(f"Geladen: {len(self.freq_profiles)} bekende masten")
         except Exception as e:
@@ -98,7 +97,7 @@ class SmartAnalyzer:
         if len(self.location_signature) > 0:
             overlap = len(seen_freqs & self.location_signature)
             ratio = overlap / max(len(self.location_signature), 1)
-            if ratio < 0.25:
+            if ratio < 0.3:
                 self.location_changed_count += 1
                 if self.location_changed_count >= self.LOCATION_CHANGE_THRESHOLD:
                     logger.info("Locatie verandering")
@@ -108,14 +107,6 @@ class SmartAnalyzer:
             else:
                 self.location_changed_count = 0
         self.location_signature = (self.location_signature | seen_freqs)
-        return False
-
-    def _is_likely_false_positive(self, freq_mhz, power_db):
-        """Check of dit een vals positief is gebaseerd op historie"""
-        # Als zelfde freq al X keer als 'mobiel' gemarkeerd maar nooit echt boven 50dB
-        for fp in self.recent_false_positives:
-            if abs(fp['freq'] - freq_mhz) < 0.05 and abs(fp['power'] - power_db) < 5:
-                return True
         return False
 
     def update(self, scan_result):
@@ -136,27 +127,29 @@ class SmartAnalyzer:
                 self.freq_profiles[fk] = {
                     'freq_mhz': af['freq_mhz'],
                     'history': deque(maxlen=self.HISTORY_LENGTH),
-                    'strikes': 0, 'is_stable': False,
-                    'last_seen': time.time(), 'first_seen': time.time(),
-                    'pre_learned': False, 'burst_count': 0
+                    'strikes': 0,
+                    'is_stable': False,
+                    'last_seen': time.time(),
+                    'first_seen': time.time(),
+                    'pre_learned': False
                 }
             
             p = self.freq_profiles[fk]
             p['history'].append(af['above_noise_db'])
             p['last_seen'] = time.time()
 
-            if len(p['history']) >= 8:
-                recent = list(p['history'])[-8:]
+            if len(p['history']) >= 5:
+                recent = list(p['history'])[-5:]
                 std = np.std(recent)
                 
                 if std < self.STD_STABLE_THRESHOLD:
                     p['strikes'] = min(p['strikes'] + 1, self.MAX_STRIKES)
                 else:
-                    p['strikes'] = max(p['strikes'] - 2, 0)
+                    p['strikes'] = max(p['strikes'] - 1, 0)
 
                 if p['strikes'] >= self.STABLE_STRIKES:
                     p['is_stable'] = True
-                elif p['strikes'] <= 2:
+                elif p['strikes'] == 0:
                     p['is_stable'] = False
 
         location_changed = self._detect_location_change(seen)
@@ -170,9 +163,9 @@ class SmartAnalyzer:
             if fk not in seen:
                 p['strikes'] = max(p['strikes'] - 1, 0)
                 p['history'].append(0)
-                if not p['is_stable'] and time.time() - p['last_seen'] > 120:
+                if not p['is_stable'] and time.time() - p['last_seen'] > 180:
                     to_del.append(fk)
-                elif p['is_stable'] and time.time() - p['last_seen'] > 900:
+                elif p['is_stable'] and time.time() - p['last_seen'] > 600:
                     to_del.append(fk)
         for fk in to_del:
             del self.freq_profiles[fk]
@@ -186,28 +179,25 @@ class SmartAnalyzer:
             if p['is_stable']:
                 mast_count += 1
                 
-                # MAST kan WEL burst doorlaten als signaal plotseling veel sterker is
-                if fk in current_powers and len(p['history']) >= 10:
-                    recent_avg = np.mean([x for x in list(p['history'])[-3:] if x > 0] or [0])
-                    historic_avg = np.mean([x for x in list(p['history'])[-15:-3] if x > 0] or [0])
+                # Sterke masten (politiebureau) WEL doorlaten
+                if fk in current_powers and current_powers[fk] >= self.STRONG_MAST_THRESHOLD:
+                    mobile_signals.append({
+                        'freq_mhz': p['freq_mhz'],
+                        'power_db': current_powers[fk],
+                        'type': 'STERKE_MAST'
+                    })
+                
+                # Movement detectie
+                if fk in current_powers and len(p['history']) >= 20:
+                    recent_avg = np.mean([x for x in list(p['history'])[-5:] if x > 0] or [0])
+                    historic_avg = np.mean([x for x in list(p['history'])[-20:-5] if x > 0] or [0])
                     
-                    # Beweging detectie - mast wordt sterker
                     if recent_avg > historic_avg + self.MOVEMENT_THRESHOLD:
                         movement_detected = True
                         mobile_signals.append({
                             'freq_mhz': p['freq_mhz'],
                             'power_db': current_powers[fk],
-                            'type': 'BEWEGING',
-                            'change': recent_avg - historic_avg
-                        })
-                    
-                    # Burst op mast (zoals bij portofoon transmissie via mast)
-                    if current_powers[fk] > historic_avg + 8:
-                        burst_detected = True
-                        mobile_signals.append({
-                            'freq_mhz': p['freq_mhz'],
-                            'power_db': current_powers[fk],
-                            'type': 'BURST-MAST'
+                            'type': 'BEWEGING'
                         })
                         
             elif fk in seen:
@@ -217,26 +207,18 @@ class SmartAnalyzer:
                 if non_zero:
                     current = non_zero[-1]
                     
-                    # False positive filter
-                    if self._is_likely_false_positive(p['freq_mhz'], current):
-                        continue
-                    
-                    # Burst detectie - nieuw signaal
-                    if len(non_zero) <= self.BURST_MAX_AGE and current > self.BURST_MIN_POWER:
+                    if len(non_zero) <= 2 and current > self.BURST_MIN_POWER and current > 30:
                         burst_detected = True
                         mobile_signals.append({
                             'freq_mhz': p['freq_mhz'],
                             'power_db': current,
-                            'type': 'BURST',
-                            'strikes': p['strikes']
+                            'type': 'BURST'
                         })
-                    # Wisselend mobiel signaal
-                    elif p['strikes'] < self.STABLE_STRIKES and current > 20:
+                    elif p['strikes'] < self.STABLE_STRIKES and current > 22:
                         mobile_signals.append({
                             'freq_mhz': p['freq_mhz'],
                             'power_db': current,
-                            'type': 'MOBIEL',
-                            'strikes': p['strikes']
+                            'type': 'MOBIEL'
                         })
 
         if mobile_signals:
@@ -246,31 +228,28 @@ class SmartAnalyzer:
         else:
             strongest = 0
 
-        # LED levels - lager en gevoeliger
         level = 0
-        if strongest >= 50:
+        if strongest >= 58:
             level = 4
-        elif strongest >= 40:
+        elif strongest >= 50:
             level = 3
-        elif strongest >= 30:
+        elif strongest >= 42:
             level = 2
-        elif strongest >= 22:
+        elif strongest >= 35:
             level = 1
         
-        # Boosts voor speciale events
-        if burst_detected:
-            level = max(level, 2)
-        if movement_detected:
-            level = max(level, 2)
-        
-        # Als zowel burst als movement = waarschijnlijk hulpdienst
-        if burst_detected and movement_detected:
-            level = max(level, 3)
+        if burst_detected and level < 2:
+            level = 2
+        if movement_detected and level < 2:
+            level = 2
 
-        learning = self.total_scans < 25
+        learning = self.total_scans < 20
         mobile_signals.sort(key=lambda x: x['power_db'], reverse=True)
 
-        if self.total_scans % 50 == 0:
+        if self.total_scans % 30 == 0:
+            logger.info(f"Scan #{self.total_scans} | Masten: {mast_count} | Mobiel: {len(mobile_signals)} | Level: {level} | Strongest: {strongest:.1f}dB")
+
+        if self.total_scans % 100 == 0:
             self._save_known_masts()
 
         self.last_result = {
@@ -293,7 +272,7 @@ class SmartAnalyzer:
         r = self.last_result
         lines = []
         if r['learning']:
-            lines.append(f"LEREN... ({r['total_scans']}/25)")
+            lines.append(f"LEREN... ({r['total_scans']}/20)")
         else:
             lines.append("MODUS: ACTIEF")
         lines.append(f"Masten: {r['mast_count']} | Detecties: {r['session_detections']}")
