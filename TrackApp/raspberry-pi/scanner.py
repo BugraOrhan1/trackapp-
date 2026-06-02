@@ -18,6 +18,7 @@ from config import (
 )
 from led_controller import LEDController
 from signal_analyzer import SignalAnalyzer
+from smart_analyzer import SmartAnalyzer
 
 
 def setup_logging():
@@ -48,6 +49,7 @@ class TetraScanner:
         self.logger = setup_logging()
         self.led = LEDController()
         self.analyzer = SignalAnalyzer()
+        self.smart = SmartAnalyzer()
         self.running = False
         self.start_time = None
         self.data_file = None
@@ -217,7 +219,16 @@ class TetraScanner:
                     continue
 
                 consecutive_errors = 0
-                self.led.set_level(result['level'])
+                smart_result = self.smart.update(result)
+                if smart_result['learning']:
+                    self.led.set_level(result['level'])
+                else:
+                    self.led.set_level(smart_result['level'])
+                    # Trigger special effects
+                    if smart_result.get('burst_detected'):
+                        self.led.trigger_burst()
+                    if smart_result.get('movement_detected'):
+                        self.led.trigger_movement()
                 self._log_scan_data(result)
                 self._print_status(result)
                 time.sleep(SCAN_INTERVAL)

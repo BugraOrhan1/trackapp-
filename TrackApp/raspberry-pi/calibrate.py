@@ -34,7 +34,8 @@ def main():
         sys.exit(1)
 
     sdr.sample_rate = SAMPLE_RATE
-    sdr.freq_correction = PPM_CORRECTION
+    if PPM_CORRECTION != 0:
+        sdr.freq_correction = PPM_CORRECTION
     sdr.gain = 'auto' if GAIN == 'auto' else float(GAIN)
 
     print("RTL-SDR gevonden en geconfigureerd")

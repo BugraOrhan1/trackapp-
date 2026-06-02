@@ -54,7 +54,9 @@ class SignalAnalyzer:
 
             self.sdr = RtlSdr()
             self.sdr.sample_rate = SAMPLE_RATE
-            self.sdr.freq_correction = PPM_CORRECTION
+            if PPM_CORRECTION != 0:
+                if PPM_CORRECTION != 0:
+                    self.sdr.freq_correction = PPM_CORRECTION
             self.sdr.gain = 'auto' if GAIN == 'auto' else float(GAIN)
             self.sdr.center_freq = self.frequencies_hz[0]
             self.is_initialized = True
