@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Smart Analyzer v4.2 - Werkende versie"""
+"""Smart Analyzer v5.2 - Mast STICKY"""
 import time
 import logging
 import numpy as np
 from collections import deque
-import json
-import os
 
 logger = logging.getLogger('tetra-scanner.smart')
 
@@ -13,101 +11,23 @@ logger = logging.getLogger('tetra-scanner.smart')
 class SmartAnalyzer:
     def __init__(self):
         self.freq_profiles = {}
-        self.STABLE_STRIKES = 7
-        self.MAX_STRIKES = 25
-        self.HISTORY_LENGTH = 60
-        self.STD_STABLE_THRESHOLD = 2.5
-        self.MOVEMENT_THRESHOLD = 8.0
-        self.BURST_MIN_POWER = 30.0
-        self.STRONG_MAST_THRESHOLD = 48.0
+        self.STABLE_STRIKES = 15
+        self.HISTORY_LENGTH = 80
+        self.STD_STABLE_THRESHOLD = 3.0  # Soepeler
         
         self.total_scans = 0
-        self.location_signature = None
-        self.location_changed_count = 0
-        self.LOCATION_CHANGE_THRESHOLD = 5
-        
         self.detections_count = 0
-        self.last_detection_time = 0
         self.session_start = time.time()
-        
         self.last_result = self._empty_result()
-        self._load_known_masts()
 
     def _empty_result(self):
         return {
-            'has_mobile': False,
-            'mobile_count': 0,
-            'mobile_signals': [],
-            'mast_count': 0,
-            'level': 0,
-            'learning': True,
-            'movement_detected': False,
-            'burst_detected': False,
-            'total_scans': 0,
-            'session_detections': 0
+            'has_mobile': False, 'mobile_count': 0, 'mobile_signals': [],
+            'mast_count': 0, 'level': 0, 'learning': True, 'total_scans': 0
         }
 
     def _freq_key(self, freq_mhz):
         return round(freq_mhz, 2)
-
-    def _load_known_masts(self):
-        try:
-            path = "/opt/tetra-scanner/data/known_masts.json"
-            if os.path.exists(path):
-                with open(path) as f:
-                    data = json.load(f)
-                    for fk_str, info in data.get('masts', {}).items():
-                        fk = float(fk_str)
-                        self.freq_profiles[fk] = {
-                            'freq_mhz': info['freq_mhz'],
-                            'history': deque([info.get('avg_power', 50)] * 5, maxlen=self.HISTORY_LENGTH),
-                            'strikes': self.STABLE_STRIKES,
-                            'is_stable': True,
-                            'last_seen': time.time(),
-                            'first_seen': time.time(),
-                            'pre_learned': True,
-                            'avg_power': info.get('avg_power', 50)
-                        }
-                logger.info(f"Geladen: {len(self.freq_profiles)} bekende masten")
-        except Exception as e:
-            logger.warning(f"Kon masten niet laden: {e}")
-
-    def _save_known_masts(self):
-        try:
-            path = "/opt/tetra-scanner/data/known_masts.json"
-            data = {'masts': {}, 'saved_at': time.time()}
-            for fk, p in self.freq_profiles.items():
-                if p['is_stable']:
-                    non_zero = [x for x in p['history'] if x > 0]
-                    if non_zero:
-                        data['masts'][str(fk)] = {
-                            'freq_mhz': p['freq_mhz'],
-                            'avg_power': float(np.mean(non_zero)),
-                            'std': float(np.std(non_zero))
-                        }
-            with open(path, 'w') as f:
-                json.dump(data, f, indent=2)
-        except Exception as e:
-            logger.warning(f"Kon masten niet opslaan: {e}")
-
-    def _detect_location_change(self, seen_freqs):
-        if self.location_signature is None:
-            self.location_signature = seen_freqs.copy()
-            return False
-        if len(self.location_signature) > 0:
-            overlap = len(seen_freqs & self.location_signature)
-            ratio = overlap / max(len(self.location_signature), 1)
-            if ratio < 0.3:
-                self.location_changed_count += 1
-                if self.location_changed_count >= self.LOCATION_CHANGE_THRESHOLD:
-                    logger.info("Locatie verandering")
-                    self.location_signature = seen_freqs.copy()
-                    self.location_changed_count = 0
-                    return True
-            else:
-                self.location_changed_count = 0
-        self.location_signature = (self.location_signature | seen_freqs)
-        return False
 
     def update(self, scan_result):
         self.total_scans += 1
@@ -116,12 +36,11 @@ class SmartAnalyzer:
 
         active_freqs = scan_result.get('active_frequencies', [])
         seen = set()
-        current_powers = {}
 
+        # Update profielen
         for af in active_freqs:
             fk = self._freq_key(af['freq_mhz'])
             seen.add(fk)
-            current_powers[fk] = af['above_noise_db']
             
             if fk not in self.freq_profiles:
                 self.freq_profiles[fk] = {
@@ -129,142 +48,139 @@ class SmartAnalyzer:
                     'history': deque(maxlen=self.HISTORY_LENGTH),
                     'strikes': 0,
                     'is_stable': False,
+                    'ever_stable': False,  # STICKY!
                     'last_seen': time.time(),
-                    'first_seen': time.time(),
-                    'pre_learned': False
+                    'baseline_power': 0,
+                    'baseline_set': False,
+                    'max_seen': 0
                 }
             
             p = self.freq_profiles[fk]
             p['history'].append(af['above_noise_db'])
             p['last_seen'] = time.time()
+            p['max_seen'] = max(p['max_seen'], af['above_noise_db'])
 
-            if len(p['history']) >= 5:
-                recent = list(p['history'])[-5:]
+            # Stabiliteits check
+            if len(p['history']) >= 10:
+                recent = list(p['history'])[-10:]
                 std = np.std(recent)
                 
                 if std < self.STD_STABLE_THRESHOLD:
-                    p['strikes'] = min(p['strikes'] + 1, self.MAX_STRIKES)
+                    p['strikes'] = min(p['strikes'] + 1, 30)
                 else:
-                    p['strikes'] = max(p['strikes'] - 1, 0)
+                    p['strikes'] = max(p['strikes'] - 1, 0)  # Trager dalen
 
+                # STICKY: Eenmaal stable = altijd stable
                 if p['strikes'] >= self.STABLE_STRIKES:
                     p['is_stable'] = True
-                elif p['strikes'] == 0:
-                    p['is_stable'] = False
+                    p['ever_stable'] = True
+                    # Baseline = gemiddelde van AL het stabiel signaal
+                    # Update altijd zodat het juist is
+                    non_zero = [x for x in list(p['history']) if x > 5]
+                    if len(non_zero) >= 10:
+                        # Gebruik 75e percentiel als baseline (typische sterkte)
+                        p['baseline_power'] = float(np.percentile(non_zero, 75))
+                        p['baseline_set'] = True
 
-        location_changed = self._detect_location_change(seen)
-        if location_changed:
-            for fk in list(self.freq_profiles.keys()):
-                if not self.freq_profiles[fk]['is_stable']:
-                    del self.freq_profiles[fk]
+            # STICKY: Als ooit stable geweest, blijft het mast
+            if p['ever_stable']:
+                p['is_stable'] = True
 
+        # Cleanup - alleen heel oude weghalen
         to_del = []
         for fk, p in self.freq_profiles.items():
             if fk not in seen:
-                p['strikes'] = max(p['strikes'] - 1, 0)
-                p['history'].append(0)
-                if not p['is_stable'] and time.time() - p['last_seen'] > 180:
+                if not p['ever_stable'] and time.time() - p['last_seen'] > 60:
                     to_del.append(fk)
-                elif p['is_stable'] and time.time() - p['last_seen'] > 600:
+                elif p['ever_stable'] and time.time() - p['last_seen'] > 3600:
                     to_del.append(fk)
         for fk in to_del:
             del self.freq_profiles[fk]
 
-        mobile_signals = []
-        mast_count = 0
-        movement_detected = False
-        burst_detected = False
+        # ===========================================
+        # LEVEL BEPALING
+        # ===========================================
+        all_signals = []
+        mast_count = sum(1 for p in self.freq_profiles.values() if p['is_stable'])
         
-        for fk, p in self.freq_profiles.items():
-            if p['is_stable']:
-                mast_count += 1
+        max_alarm_db = 0
+        
+        for af in active_freqs:
+            fk = self._freq_key(af['freq_mhz'])
+            p = self.freq_profiles.get(fk, {})
+            current = af['above_noise_db']
+            
+            if p.get('is_stable') or p.get('ever_stable'):
+                # MAST - check voor boost
+                baseline = p.get('baseline_power', current)
+                boost = current - baseline if baseline > 0 else 0
                 
-                # Sterke masten (politiebureau) WEL doorlaten
-                if fk in current_powers and current_powers[fk] >= self.STRONG_MAST_THRESHOLD:
-                    mobile_signals.append({
-                        'freq_mhz': p['freq_mhz'],
-                        'power_db': current_powers[fk],
-                        'type': 'STERKE_MAST'
+                all_signals.append({
+                    'freq_mhz': af['freq_mhz'],
+                    'power_db': current,
+                    'baseline_db': baseline,
+                    'boost_db': boost,
+                    'type': 'MAST'
+                })
+                
+                # ALARM alleen bij grote boost (10+ dB hoger dan normaal)
+                if boost >= 12 and current >= 50:
+                    max_alarm_db = max(max_alarm_db, current)
+            else:
+                # MOBIEL (echt nieuw signaal)
+                if current >= 25:
+                    all_signals.append({
+                        'freq_mhz': af['freq_mhz'],
+                        'power_db': current,
+                        'type': 'MOBIEL'
                     })
-                
-                # Movement detectie
-                if fk in current_powers and len(p['history']) >= 20:
-                    recent_avg = np.mean([x for x in list(p['history'])[-5:] if x > 0] or [0])
-                    historic_avg = np.mean([x for x in list(p['history'])[-20:-5] if x > 0] or [0])
-                    
-                    if recent_avg > historic_avg + self.MOVEMENT_THRESHOLD:
-                        movement_detected = True
-                        mobile_signals.append({
-                            'freq_mhz': p['freq_mhz'],
-                            'power_db': current_powers[fk],
-                            'type': 'BEWEGING'
-                        })
-                        
-            elif fk in seen:
-                history = list(p['history'])
-                non_zero = [x for x in history if x > 0]
-                
-                if non_zero:
-                    current = non_zero[-1]
-                    
-                    if len(non_zero) <= 2 and current > self.BURST_MIN_POWER and current > 30:
-                        burst_detected = True
-                        mobile_signals.append({
-                            'freq_mhz': p['freq_mhz'],
-                            'power_db': current,
-                            'type': 'BURST'
-                        })
-                    elif p['strikes'] < self.STABLE_STRIKES and current > 22:
-                        mobile_signals.append({
-                            'freq_mhz': p['freq_mhz'],
-                            'power_db': current,
-                            'type': 'MOBIEL'
-                        })
+                    max_alarm_db = max(max_alarm_db, current)
 
-        if mobile_signals:
-            strongest = max(s['power_db'] for s in mobile_signals)
-            self.last_detection_time = time.time()
-            self.detections_count += 1
-        else:
-            strongest = 0
+        all_signals.sort(key=lambda x: x['power_db'], reverse=True)
 
+        # Level bepalen
         level = 0
-        if strongest >= 58:
-            level = 4
-        elif strongest >= 50:
-            level = 3
-        elif strongest >= 42:
-            level = 2
-        elif strongest >= 35:
-            level = 1
+        if max_alarm_db >= 55:
+            level = 4  # ROOD
+        elif max_alarm_db >= 45:
+            level = 3  # ORANJE
+        elif max_alarm_db >= 35:
+            level = 2  # GEEL
+        elif max_alarm_db >= 25:
+            level = 1  # GROEN
         
-        if burst_detected and level < 2:
-            level = 2
-        if movement_detected and level < 2:
-            level = 2
+        # Als er masten aanwezig zijn zonder echt alarm = max GROEN
+        if level == 0 and mast_count > 0:
+            strongest_mast = max((s['power_db'] for s in all_signals if s.get('type') == 'MAST'), default=0)
+            if strongest_mast >= 40:
+                level = 1  # GROEN
 
-        learning = self.total_scans < 20
-        mobile_signals.sort(key=lambda x: x['power_db'], reverse=True)
+        if max_alarm_db > 0:
+            self.detections_count += 1
 
-        if self.total_scans % 30 == 0:
-            logger.info(f"Scan #{self.total_scans} | Masten: {mast_count} | Mobiel: {len(mobile_signals)} | Level: {level} | Strongest: {strongest:.1f}dB")
+        learning = self.total_scans < 30
 
-        if self.total_scans % 100 == 0:
-            self._save_known_masts()
+        # Log elke 20 scans
+        if self.total_scans % 20 == 0:
+            top_info = []
+            for s in all_signals[:4]:
+                tag = s['type']
+                if tag == 'MAST' and s.get('boost_db', 0) >= 10:
+                    tag = 'MAST↑↑'
+                elif tag == 'MAST' and s.get('boost_db', 0) >= 5:
+                    tag = 'MAST↑'
+                top_info.append(f"{s['freq_mhz']:.3f}={s['power_db']:.0f}[{tag}]")
+            logger.info(f"Scan #{self.total_scans} | Masten:{mast_count} | Level:{level} | Alarm:{max_alarm_db:.0f}dB | {' '.join(top_info)}")
 
         self.last_result = {
-            'has_mobile': len(mobile_signals) > 0,
-            'mobile_count': len(mobile_signals),
-            'mobile_signals': mobile_signals[:5],
+            'has_mobile': max_alarm_db > 0,
+            'mobile_count': len([s for s in all_signals if s.get('type') == 'MOBIEL']),
+            'mobile_signals': all_signals,
             'mast_count': mast_count,
             'level': level,
             'learning': learning,
-            'movement_detected': movement_detected,
-            'burst_detected': burst_detected,
             'total_scans': self.total_scans,
-            'session_detections': self.detections_count,
-            'strongest_mobile_db': strongest,
-            'session_minutes': int((time.time() - self.session_start) / 60)
+            'strongest_db': max_alarm_db
         }
         return self.last_result
 
@@ -272,17 +188,11 @@ class SmartAnalyzer:
         r = self.last_result
         lines = []
         if r['learning']:
-            lines.append(f"LEREN... ({r['total_scans']}/20)")
+            lines.append(f"LEREN... ({r['total_scans']}/30)")
         else:
-            lines.append("MODUS: ACTIEF")
-        lines.append(f"Masten: {r['mast_count']} | Detecties: {r['session_detections']}")
-        if r['burst_detected']:
-            lines.append("*** BURST ***")
-        if r['movement_detected']:
-            lines.append("*** BEWEGING ***")
-        if r['has_mobile']:
-            lines.append(f"MOBIEL: {r['mobile_count']}")
+            lines.append("ACTIEF")
+        lines.append(f"Masten: {r['mast_count']}")
+        if r['mobile_signals']:
             for s in r['mobile_signals'][:3]:
-                tag = s.get('type', '?')
-                lines.append(f"  [{tag}] {s['freq_mhz']:.3f} {s['power_db']:.1f}dB")
+                lines.append(f"  [{s['type']}] {s['freq_mhz']:.3f} {s['power_db']:.1f}dB")
         return lines
